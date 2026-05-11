@@ -84,31 +84,33 @@ html, body {
       text-align: center;
     }
     .musicVolumeControl {
-      min-width: 150px;
+      min-width: 0;
       display: flex;
       align-items: center;
-      gap: 8px;
+      justify-content: center;
+      gap: 6px;
       background: rgba(255,255,255,0.95);
       border: 2px solid #000;
-      padding: 7px 10px;
+      padding: 7px 8px;
       box-shadow: 4px 4px 0 #000;
       font-size: 12px;
       font-weight: 700;
       line-height: 1;
       box-sizing: border-box;
+      overflow: hidden;
     }
     .musicVolumeControl label {
       white-space: nowrap;
+      flex: 0 0 auto;
     }
     #musicVolumeSlider {
-      width: 86px;
+      width: 58px;
+      min-width: 42px;
+      max-width: 58px;
       accent-color: #000;
       cursor: pointer;
       touch-action: manipulation;
-    }
-    #musicVolumeValue {
-      min-width: 34px;
-      text-align: right;
+      flex: 0 1 auto;
     }
     button:active, button.active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; background: #eee; }
     body.modalOpen #ui,
@@ -328,6 +330,21 @@ html, body {
         padding-left: 8px;
         padding-right: 8px;
       }
+      .musicVolumeControl {
+        width: 100%;
+        min-width: 0;
+        padding-left: 5px;
+        padding-right: 5px;
+        gap: 4px;
+      }
+      .musicVolumeControl label {
+        font-size: 11px;
+      }
+      #musicVolumeSlider {
+        width: 44px;
+        min-width: 34px;
+        max-width: 44px;
+      }
       .statPill {
         flex: 1 1 0;
         text-align: center;
@@ -414,12 +431,17 @@ html, body {
         background: rgba(255,255,255,0.82);
       }
       .musicVolumeControl {
-        min-width: 138px;
-        padding: 5px 8px;
+        min-width: 96px;
+        padding: 5px 7px;
+        gap: 5px;
         box-shadow: 3px 3px 0 #000;
         background: rgba(255,255,255,0.82);
       }
-      #musicVolumeSlider { width: 72px; }
+      #musicVolumeSlider {
+        width: 48px;
+        min-width: 40px;
+        max-width: 48px;
+      }
       #touchControls {
         bottom: calc(9px + env(safe-area-inset-bottom, 0px));
         padding-left: calc(12px + env(safe-area-inset-left, 0px));
@@ -503,7 +525,6 @@ html, body {
         <div class="musicVolumeControl" aria-label="Music volume control">
           <label for="musicVolumeSlider">MUSIC</label>
           <input id="musicVolumeSlider" type="range" min="0" max="100" value="16" />
-          <span id="musicVolumeValue">16%</span>
         </div>
         <button id="restartTouch" class="utilityBtn">Restart</button>
       </div>
@@ -970,8 +991,6 @@ html, body {
         const clamped = Math.max(0, Math.min(100, Number(value) || 0));
         musicVolume = clamped / 100;
         assetAudio.music.volume = musicVolume;
-        const valueEl = document.getElementById('musicVolumeValue');
-        if (valueEl) valueEl.textContent = `${Math.round(clamped)}%`;
       }
 
       function toggleSound() {
@@ -1036,7 +1055,7 @@ html, body {
         return spr;
       }
 
-      function makeSpeechBubbleSprite(text) {
+      function makeSpeechBubbleSprite(text, tailSide = 'left') {
         const c = document.createElement('canvas');
         c.width = 900; c.height = 420;
         const ctx = c.getContext('2d');
@@ -1057,9 +1076,15 @@ html, body {
         ctx.quadraticCurveTo(bubbleX + bubbleW, bubbleY, bubbleX + bubbleW, bubbleY + radius);
         ctx.lineTo(bubbleX + bubbleW, bubbleY + bubbleH - radius);
         ctx.quadraticCurveTo(bubbleX + bubbleW, bubbleY + bubbleH, bubbleX + bubbleW - radius, bubbleY + bubbleH);
-        ctx.lineTo(bubbleX + 176, bubbleY + bubbleH);
-        ctx.lineTo(bubbleX + 124, bubbleY + bubbleH + 54);
-        ctx.lineTo(bubbleX + 142, bubbleY + bubbleH);
+        if (tailSide === 'right') {
+          ctx.lineTo(bubbleX + bubbleW - 142, bubbleY + bubbleH);
+          ctx.lineTo(bubbleX + bubbleW - 124, bubbleY + bubbleH + 54);
+          ctx.lineTo(bubbleX + bubbleW - 176, bubbleY + bubbleH);
+        } else {
+          ctx.lineTo(bubbleX + 176, bubbleY + bubbleH);
+          ctx.lineTo(bubbleX + 124, bubbleY + bubbleH + 54);
+          ctx.lineTo(bubbleX + 142, bubbleY + bubbleH);
+        }
         ctx.lineTo(bubbleX + radius, bubbleY + bubbleH);
         ctx.quadraticCurveTo(bubbleX, bubbleY + bubbleH, bubbleX, bubbleY + bubbleH - radius);
         ctx.lineTo(bubbleX, bubbleY + radius);
@@ -1071,8 +1096,8 @@ html, body {
         ctx.fillStyle = '#000000';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.font = '58px "StickBubble", "Comic Sans MS", cursive';
-        wrapBubbleText(ctx, text, bubbleX + bubbleW / 2, 152, 650, 68);
+        ctx.font = '72px "StickBubble", "Comic Sans MS", cursive';
+        wrapBubbleText(ctx, text, bubbleX + bubbleW / 2, 154, 680, 78);
 
         const tex = new THREE.CanvasTexture(c);
         tex.needsUpdate = true;
@@ -1107,8 +1132,8 @@ html, body {
         fx.push({ sprite, life: 58, kind: 'text' });
       }
 
-      function spawnSpeechBubble(text, x, y) {
-        const sprite = makeSpeechBubbleSprite(text);
+      function spawnSpeechBubble(text, x, y, tailSide = 'left') {
+        const sprite = makeSpeechBubbleSprite(text, tailSide);
         sprite.position.set(x, y, 0.16);
         sprite.scale.multiplyScalar(0.96);
         fxGroup.add(sprite);
@@ -1479,13 +1504,17 @@ html, body {
               e.dead = true;
               scene.remove(e.group);
               if (e.pendingBubbleWord && !e.bubbleTimeout) {
-                const bubbleX = e.x + 1.05;
-                const bubbleY = e.y + 1.72;
                 const bubbleWord = e.pendingBubbleWord;
                 e.pendingBubbleWord = null;
                 e.bubbleTimeout = delayed(() => {
                   e.bubbleTimeout = null;
-                  if (!gameOver) spawnSpeechBubble(bubbleWord, bubbleX, bubbleY);
+                  if (!gameOver) {
+                    const side = facingDir >= 0 ? 1 : -1;
+                    const tailSide = side >= 0 ? 'left' : 'right';
+                    const bubbleX = playerGroup.position.x + side * 1.25;
+                    const bubbleY = playerGroup.position.y + 2.05;
+                    spawnSpeechBubble(bubbleWord, bubbleX, bubbleY, tailSide);
+                  }
                 }, 500);
               }
             }
