@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <title>Stick Of Persia</title>
+  <title>In a Stickman's World</title>
   <style>
     @font-face {
       font-family: 'StickTitle';
@@ -177,32 +177,29 @@ html, body {
     }
     #introTitle {
       margin: 0;
-      line-height: 0.85;
-      letter-spacing: -2px;
+      line-height: 0.86;
       text-transform: uppercase;
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 6px;
       align-items: flex-start;
     }
-    #introTitle .smallTitle {
+    #introTitle .smallTitle,
+    #introTitle .bigTitle {
       font-family: 'StickTitle', Georgia, 'Times New Roman', serif;
-      font-size: clamp(28px, 5vw, 56px);
-      font-style: italic;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      transform: skewX(-8deg);
+      font-style: normal;
+      font-weight: 400;
+    }
+    #introTitle .smallTitle {
+      font-size: clamp(30px, 5vw, 58px);
+      letter-spacing: 0.04em;
       border-bottom: 2px solid #000;
       padding-bottom: 6px;
       margin-bottom: 4px;
     }
     #introTitle .bigTitle {
-      font-family: 'StickTitle', Georgia, 'Times New Roman', serif;
-      font-size: clamp(56px, 12vw, 118px);
-      font-style: italic;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      transform: skewX(-10deg);
+      font-size: clamp(46px, 9vw, 98px);
+      letter-spacing: 0.01em;
       text-shadow: 4px 4px 0 rgba(0,0,0,0.12);
     }
     #introSubtitle {
@@ -457,8 +454,8 @@ html, body {
 <body>
   <div id="intro">
     <div id="introCard">
-      <h1 id="introTitle"><span class="smallTitle">Stick O'</span><span class="bigTitle">Persia</span></h1>
-      <div id="introSubtitle">Retro palace escape - stickline edition</div>
+      <h1 id="introTitle"><span class="smallTitle">In a</span><span class="bigTitle">Stickman's World</span></h1>
+      <div id="introSubtitle">Retro stickman world - palace escape</div>
       <div id="introText">Beneath a paper-white moon, a line-born prince wakes inside a silent palace of traps, guards, ledges, and locked exits.</div>
       <div id="introPrompt"><span>Run. Leap. Block. Strike. Escape.</span><button id="startButton">START QUEST</button></div>
     </div>
@@ -512,13 +509,20 @@ html, body {
       const GRAVITY = -0.032;
       const JUMP_SPEED = 0.62;
       const MOVE_SPEED = 0.14;
+      const ATTACK_TOTAL_FRAMES = 8;
+      const ATTACK_COOLDOWN_FRAMES = 8;
+      const ATTACK_STRIKE_START = 7;
+      const ATTACK_STRIKE_END = 4;
       const START_X = -7;
       const START_Y = 0;
 
       let hp = 5, wallet = 50, gameOver = false, introActive = true;
       let onGround = true, facingDir = 1, playerState = 'idle', animTime = 0, stateFrame = 0;
       let attackTimer = 0, attackCooldown = 0, damageCooldown = 0, cameraShake = 0;
+      let attackSoundPlayed = false;
       let stepTick = 0;
+      let footstepSide = 0;
+      let lastFootstepFrame = -999;
       const maxHp = 5;
 
       let fpsFrames = 0, fpsTime = 0, currentFPS = 60, lowPerfMode = false;
@@ -597,7 +601,7 @@ html, body {
       const assetAudio = {
         music: new Audio('./music/Prince%20of%20Persia%20low%20res.mp3'),
         attackAir: new Audio('./sfx/whoosh%20in%20air%20(1).mp3'),
-        attackHit: new Audio('./sfx/whoosh%20and%20hit.wav'),
+        attackHit: new Audio('./sfx/whoosh%20last%20hit.mp3'),
         attackKill: new Audio('./sfx/whoosh%20last%20hit.mp3')
       };
       assetAudio.music.loop = true;
@@ -726,17 +730,24 @@ html, body {
             sn(0, 0.10, 0.075, 260, 'lowpass');
             break;
           case 'step':
-            // Quiet foot tap, less harsh than noise-only
-            st(0, 70, 0.026, 'sine', 0.045, -5);
-            sn(0, 0.035, 0.026, 340, 'lowpass');
+            // Fallback quiet foot tap.
+            st(0, 68, 0.022, 'sine', 0.030, -4);
+            sn(0, 0.026, 0.015, 300, 'lowpass');
+            break;
+          case 'footstepLeft':
+            // Subtle cloth + floor foley, slightly lower left step.
+            st(0, 62, 0.024, 'sine', 0.026, -3);
+            sn(0, 0.024, 0.014, 260, 'lowpass');
+            sn(18, 0.020, 0.008, 900, 'bandpass');
+            break;
+          case 'footstepRight':
+            // Subtle cloth + floor foley, slightly lighter right step.
+            st(0, 74, 0.020, 'sine', 0.022, -4);
+            sn(0, 0.022, 0.012, 330, 'lowpass');
+            sn(18, 0.018, 0.007, 1050, 'bandpass');
             break;
           case 'attack':
-            playAssetSound('attackAir');
-            // Sword whoosh: bright leading edge, fast falling blade tone, exertion
-            sn(0, 0.12, 0.10, 2400, 'highpass');
-            st(0, 920, 0.055, 'sawtooth', 0.08, -540);
-            sn(22, 0.07, 0.04, 1300, 'bandpass');
-            delayed(() => playSfxImmediate('grunt'), 42);
+            // Attack audio is timed inside checkEnemyHit() so air hits and enemy hits do not double-play.
             break;
           case 'enemyAttack':
             // Heavier guard wind-up cue
@@ -775,6 +786,14 @@ html, body {
             st(70, 640, 0.09, 'sine', 0.095, 190);
             st(135, 960, 0.11, 'triangle', 0.07, 120);
             sn(0, 0.13, 0.025, 2100, 'highpass');
+            break;
+          case 'collectWin':
+            // Winning pickup sound for floating circle collectibles
+            st(0, 523, 0.06, 'triangle', 0.14, 80);
+            st(65, 659, 0.06, 'triangle', 0.13, 90);
+            st(130, 784, 0.08, 'sine', 0.12, 120);
+            st(220, 1046, 0.14, 'triangle', 0.10, 160);
+            sn(0, 0.12, 0.025, 2800, 'highpass');
             break;
           case 'buy':
             st(0, 520, 0.055, 'triangle', 0.10, 80);
@@ -1063,7 +1082,7 @@ html, body {
           p.sheathedSword = false;
         }
         if (state === 'attack') {
-          const strike = attackTimer <= 18 && attackTimer > 10;
+          const strike = attackTimer <= ATTACK_STRIKE_START && attackTimer >= ATTACK_STRIKE_END;
           p.head = [0.08 * s, 1.56]; p.neck = [0.05 * s, 1.38]; p.hip = [-0.02 * s, 0.84];
           p.a1 = strike ? [0.36 * s, 1.30] : [-0.32 * s, 1.45];
           p.h1 = strike ? [0.62 * s, 1.08] : [-0.48 * s, 1.58];
@@ -1230,7 +1249,12 @@ html, body {
         playerVelocity.x = move * MOVE_SPEED;
         if (keys.ArrowDown && onGround) playerVelocity.x *= 0.35;
         if (keys.ArrowUp && onGround && attackTimer <= 0) { playerVelocity.y = JUMP_SPEED; onGround = false; playSfx('jump'); setPlayerState('jump', true); }
-        if (keys[' '] && attackCooldown <= 0) { attackTimer = 24; attackCooldown = 32; playSfx('attack'); setPlayerState('attack', true); }
+        if (keys[' '] && attackCooldown <= 0) {
+          attackTimer = ATTACK_TOTAL_FRAMES;
+          attackCooldown = ATTACK_COOLDOWN_FRAMES;
+          attackSoundPlayed = false;
+          setPlayerState('attack', true);
+        }
         if (attackTimer > 0) attackTimer--; else if (playerState === 'attack') setPlayerState(onGround ? 'idle' : 'fall', true);
         attackCooldown = Math.max(0, attackCooldown - 1);
         damageCooldown = Math.max(0, damageCooldown - 1);
@@ -1246,9 +1270,18 @@ html, body {
         else if (keys.ArrowDown) setPlayerState('block');
         else if (Math.abs(playerVelocity.x) > 0.01) {
           setPlayerState('run');
-          stepTick++;
-          if (onGround && stepTick % 18 === 0) playSfx('step');
-        } else { stepTick = 0; setPlayerState('idle'); }
+          stepTick += frameScale;
+          const stepInterval = keys.ArrowDown ? 22 : 13;
+          if (onGround && stepTick - lastFootstepFrame >= stepInterval) {
+            lastFootstepFrame = stepTick;
+            footstepSide = 1 - footstepSide;
+            playSfx(footstepSide ? 'footstepLeft' : 'footstepRight');
+          }
+        } else {
+          stepTick = 0;
+          lastFootstepFrame = -999;
+          setPlayerState('idle');
+        }
       }
 
       function applyDamage(amount, msg) {
@@ -1271,7 +1304,7 @@ html, body {
       function checkPotions() {
         const x = playerGroup.position.x, y = feetY();
         for (const p of potions) if (!p.collected && Math.abs(x - p.x) < 0.55 && Math.abs(y - p.y) < 0.8) {
-          p.collected = true; playSfx('potion'); scene.remove(p.group); hp = Math.min(maxHp, hp + 1); wallet += 5; burst(p.x, p.y + 0.6, 10); spawnText('+5 AED', p.x, p.y + 1.0); updateUI();
+          p.collected = true; playSfx('collectWin'); scene.remove(p.group); hp = Math.min(maxHp, hp + 1); wallet += 5; burst(p.x, p.y + 0.6, 10); spawnText('+5 AED', p.x, p.y + 1.0); updateUI();
         }
       }
       function checkDoors() {
@@ -1279,25 +1312,50 @@ html, body {
         for (const d of doors) if (d.isExit && Math.abs(x - d.x) < 0.55 && Math.abs(y - d.y) < 1.0) endGame('VICTORY!');
       }
       function checkEnemyHit() {
-        if (attackTimer <= 10 || attackTimer > 18) return;
+        if (attackTimer < ATTACK_STRIKE_END || attackTimer > ATTACK_STRIKE_START) return;
+
         const reachX = playerGroup.position.x + facingDir * 0.82;
-        for (const e of enemies) if (!e.dead && e.state !== 'death' && Math.abs(reachX - e.x) < 1.05 && Math.abs(feetY() - e.y) < 1.1) {
-          e.hp--;
-          e.state = e.hp <= 0 ? 'death' : 'hit';
-          e.frame = 0;
-          attackTimer = 0;
-          if (e.battleCryTimeout) { clearTimeout(e.battleCryTimeout); e.battleCryTimeout = null; }
-          burst(e.x, e.y + 1.0, 9);
-          if (e.hp <= 0) {
-            playAssetSound('attackKill');
-            playSfx('enemyAah');
-            e.pendingBubbleWord = enemyBubbleWords[Math.floor(Math.random() * enemyBubbleWords.length)];
-            delayed(() => { if (!gameOver) { playSfx('coin'); wallet += 10; spawnText('+10 AED', e.x, e.y + 1.25); updateUI(); } }, 120);
-          } else {
-            playAssetSound('attackHit');
-            playSfx('enemyOoh');
-            delayed(() => { if (!audio.muted) playSfxImmediate('impactLight'); }, 40);
+        let didHit = false;
+
+        for (const e of enemies) {
+          if (!e.dead && e.state !== 'death' && Math.abs(reachX - e.x) < 1.05 && Math.abs(feetY() - e.y) < 1.1) {
+            didHit = true;
+            attackSoundPlayed = true;
+
+            e.hp--;
+            e.state = e.hp <= 0 ? 'death' : 'hit';
+            e.frame = 0;
+            attackTimer = 0;
+
+            if (e.battleCryTimeout) {
+              clearTimeout(e.battleCryTimeout);
+              e.battleCryTimeout = null;
+            }
+
+            burst(e.x, e.y + 1.0, 9);
+
+            if (e.hp <= 0) {
+              playAssetSound('attackKill');
+              e.pendingBubbleWord = enemyBubbleWords[Math.floor(Math.random() * enemyBubbleWords.length)];
+              delayed(() => {
+                if (!gameOver) {
+                  playSfx('coin');
+                  wallet += 10;
+                  spawnText('+10 AED', e.x, e.y + 1.25);
+                  updateUI();
+                }
+              }, 120);
+            } else {
+              playAssetSound('attackHit');
+            }
+
+            break;
           }
+        }
+
+        if (!didHit && !attackSoundPlayed) {
+          playAssetSound('attackAir');
+          attackSoundPlayed = true;
         }
       }
       function updateEnemies() {
@@ -1449,7 +1507,7 @@ html, body {
         document.getElementById('intro').classList.add('hidden');
         document.getElementById('intro').style.display = 'none';
         clearPendingTimeouts();
-        hp = maxHp; wallet = 50; gameOver = false; facingDir = 1; attackTimer = 0; attackCooldown = 0; damageCooldown = 0; cameraShake = 0; stateFrame = 0; playerState = 'idle'; lowPerfMode = false;
+        hp = maxHp; wallet = 50; gameOver = false; facingDir = 1; attackTimer = 0; attackCooldown = 0; attackSoundPlayed = false; damageCooldown = 0; stepTick = 0; footstepSide = 0; lastFootstepFrame = -999; cameraShake = 0; stateFrame = 0; playerState = 'idle'; lowPerfMode = false;
         renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
         snapPlayerToGround(START_X, START_Y);
         orbit.yaw = 0; orbit.height = 1.35; orbit.distance = 14; camera.position.set(START_X + 2, 4.8, 14); camera.lookAt(START_X, 0.8, 0);
