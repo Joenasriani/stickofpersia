@@ -83,6 +83,33 @@ html, body {
       min-width: 86px;
       text-align: center;
     }
+    .musicVolumeControl {
+      min-width: 150px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.95);
+      border: 2px solid #000;
+      padding: 7px 10px;
+      box-shadow: 4px 4px 0 #000;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+      box-sizing: border-box;
+    }
+    .musicVolumeControl label {
+      white-space: nowrap;
+    }
+    #musicVolumeSlider {
+      width: 86px;
+      accent-color: #000;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+    #musicVolumeValue {
+      min-width: 34px;
+      text-align: right;
+    }
     button:active, button.active { transform: translate(2px, 2px); box-shadow: 2px 2px 0 #000; background: #eee; }
     body.modalOpen #ui,
     body.modalOpen #touchControls {
@@ -292,7 +319,7 @@ html, body {
         width: 100%;
         max-width: none;
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         justify-content: stretch;
       }
       .utilityBtn {
@@ -386,6 +413,13 @@ html, body {
         box-shadow: 3px 3px 0 #000;
         background: rgba(255,255,255,0.82);
       }
+      .musicVolumeControl {
+        min-width: 138px;
+        padding: 5px 8px;
+        box-shadow: 3px 3px 0 #000;
+        background: rgba(255,255,255,0.82);
+      }
+      #musicVolumeSlider { width: 72px; }
       #touchControls {
         bottom: calc(9px + env(safe-area-inset-bottom, 0px));
         padding-left: calc(12px + env(safe-area-inset-left, 0px));
@@ -466,6 +500,11 @@ html, body {
       <div class="utilityCluster">
         <button id="buyButton" class="utilityBtn">Health +1</button>
         <button id="soundButton" class="utilityBtn" aria-label="Mute or unmute audio">MUTE</button>
+        <div class="musicVolumeControl" aria-label="Music volume control">
+          <label for="musicVolumeSlider">MUSIC</label>
+          <input id="musicVolumeSlider" type="range" min="0" max="100" value="16" />
+          <span id="musicVolumeValue">16%</span>
+        </div>
         <button id="restartTouch" class="utilityBtn">Restart</button>
       </div>
     </div>
@@ -520,11 +559,14 @@ html, body {
       let footstepSide = 0;
       let lastFootstepFrame = -999;
       const maxHp = 5;
+      // Visual scale: keeps all stick characters proportionally shorter than door height.
+      const CHAR_SCALE = 0.72;
 
       let fpsFrames = 0, fpsTime = 0, currentFPS = 60, lowPerfMode = false;
 
       const playerGroup = new THREE.Group();
       const stickParts = new THREE.Group();
+      stickParts.scale.set(CHAR_SCALE, CHAR_SCALE, CHAR_SCALE);
       playerGroup.add(stickParts);
       scene.add(playerGroup);
       const playerVelocity = new THREE.Vector3();
@@ -654,6 +696,7 @@ html, body {
 
       const audio = { ctx: null, master: null, muted: false, unlocked: false, noiseBuffer: null };
       const pendingTimeouts = [];
+      let musicVolume = 0.16;
 
       const assetAudio = {
         music: new Audio('./music/Prince%20of%20Persia%20low%20res.mp3'),
@@ -662,7 +705,7 @@ html, body {
         attackKill: new Audio('./sfx/whoosh%20last%20hit.mp3')
       };
       assetAudio.music.loop = true;
-      assetAudio.music.volume = 0.16;
+      assetAudio.music.volume = musicVolume;
       assetAudio.attackAir.volume = 0.78;
       assetAudio.attackHit.volume = 0.9;
       assetAudio.attackKill.volume = 0.95;
@@ -775,10 +818,11 @@ html, body {
             sn(0, 0.18, 0.035, 2800, 'highpass');
             break;
           case 'jump':
-            // Springy upward launch with air trail
-            st(0, 190, 0.10, 'triangle', 0.14, 300);
-            st(24, 360, 0.08, 'sine', 0.07, 220);
-            sn(0, 0.08, 0.035, 1900, 'highpass');
+            // Louder jump SFX balanced against the MP3 combat sounds
+            st(0, 190, 0.11, 'triangle', 0.42, 320);
+            st(24, 360, 0.09, 'sine', 0.26, 240);
+            st(58, 520, 0.06, 'triangle', 0.16, 180);
+            sn(0, 0.09, 0.12, 1900, 'highpass');
             break;
           case 'land':
             // Short grounded thump and dust
@@ -845,12 +889,12 @@ html, body {
             sn(0, 0.13, 0.025, 2100, 'highpass');
             break;
           case 'collectWin':
-            // Winning pickup sound for floating circle collectibles
-            st(0, 523, 0.06, 'triangle', 0.14, 80);
-            st(65, 659, 0.06, 'triangle', 0.13, 90);
-            st(130, 784, 0.08, 'sine', 0.12, 120);
-            st(220, 1046, 0.14, 'triangle', 0.10, 160);
-            sn(0, 0.12, 0.025, 2800, 'highpass');
+            // Louder winning pickup sound balanced against the MP3 combat sounds
+            st(0, 523, 0.07, 'triangle', 0.38, 90);
+            st(65, 659, 0.07, 'triangle', 0.34, 100);
+            st(130, 784, 0.09, 'sine', 0.30, 130);
+            st(220, 1046, 0.16, 'triangle', 0.24, 170);
+            sn(0, 0.13, 0.09, 2800, 'highpass');
             break;
           case 'buy':
             st(0, 520, 0.055, 'triangle', 0.10, 80);
@@ -922,6 +966,14 @@ html, body {
         while (pendingTimeouts.length) clearTimeout(pendingTimeouts.pop());
       }
 
+      function setMusicVolume(value) {
+        const clamped = Math.max(0, Math.min(100, Number(value) || 0));
+        musicVolume = clamped / 100;
+        assetAudio.music.volume = musicVolume;
+        const valueEl = document.getElementById('musicVolumeValue');
+        if (valueEl) valueEl.textContent = `${Math.round(clamped)}%`;
+      }
+
       function toggleSound() {
         audio.muted = !audio.muted;
         const btn = document.getElementById('soundButton');
@@ -986,13 +1038,13 @@ html, body {
 
       function makeSpeechBubbleSprite(text) {
         const c = document.createElement('canvas');
-        c.width = 640; c.height = 320;
+        c.width = 900; c.height = 420;
         const ctx = c.getContext('2d');
-        const bubbleX = 36;
-        const bubbleY = 26;
-        const bubbleW = 548;
-        const bubbleH = 176;
-        const radius = 30;
+        const bubbleX = 52;
+        const bubbleY = 34;
+        const bubbleW = 760;
+        const bubbleH = 238;
+        const radius = 40;
 
         ctx.clearRect(0, 0, c.width, c.height);
         ctx.fillStyle = '#ffffff';
@@ -1005,9 +1057,9 @@ html, body {
         ctx.quadraticCurveTo(bubbleX + bubbleW, bubbleY, bubbleX + bubbleW, bubbleY + radius);
         ctx.lineTo(bubbleX + bubbleW, bubbleY + bubbleH - radius);
         ctx.quadraticCurveTo(bubbleX + bubbleW, bubbleY + bubbleH, bubbleX + bubbleW - radius, bubbleY + bubbleH);
-        ctx.lineTo(bubbleX + 138, bubbleY + bubbleH);
-        ctx.lineTo(bubbleX + 96, bubbleY + bubbleH + 38);
-        ctx.lineTo(bubbleX + 110, bubbleY + bubbleH);
+        ctx.lineTo(bubbleX + 176, bubbleY + bubbleH);
+        ctx.lineTo(bubbleX + 124, bubbleY + bubbleH + 54);
+        ctx.lineTo(bubbleX + 142, bubbleY + bubbleH);
         ctx.lineTo(bubbleX + radius, bubbleY + bubbleH);
         ctx.quadraticCurveTo(bubbleX, bubbleY + bubbleH, bubbleX, bubbleY + bubbleH - radius);
         ctx.lineTo(bubbleX, bubbleY + radius);
@@ -1019,14 +1071,14 @@ html, body {
         ctx.fillStyle = '#000000';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.font = '36px "StickBubble", "Comic Sans MS", cursive';
-        wrapBubbleText(ctx, text, bubbleX + bubbleW / 2, 112, 438, 44);
+        ctx.font = '58px "StickBubble", "Comic Sans MS", cursive';
+        wrapBubbleText(ctx, text, bubbleX + bubbleW / 2, 152, 650, 68);
 
         const tex = new THREE.CanvasTexture(c);
         tex.needsUpdate = true;
         const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
         const spr = new THREE.Sprite(mat);
-        spr.scale.set(3.35, 1.9, 1);
+        spr.scale.set(4.65, 2.55, 1);
         return spr;
       }
 
@@ -1058,7 +1110,7 @@ html, body {
       function spawnSpeechBubble(text, x, y) {
         const sprite = makeSpeechBubbleSprite(text);
         sprite.position.set(x, y, 0.16);
-        sprite.scale.multiplyScalar(0.84);
+        sprite.scale.multiplyScalar(0.96);
         fxGroup.add(sprite);
         fx.push({ sprite, life: 84, maxLife: 84, kind: 'bubble' });
       }
@@ -1072,7 +1124,7 @@ html, body {
               const maxLife = item.maxLife || 84;
               const age = maxLife - item.life;
               const pop = Math.min(1, 0.78 + age * 0.03);
-              item.sprite.scale.set(3.35 * 0.84 * Math.min(pop, 1.05), 1.9 * 0.84 * Math.min(pop, 1.05), 1);
+              item.sprite.scale.set(4.65 * 0.96 * Math.min(pop, 1.05), 2.55 * 0.96 * Math.min(pop, 1.05), 1);
               item.sprite.position.y += 0.011;
               item.sprite.position.x += 0.0025;
               item.sprite.material.opacity = item.life > 18 ? 1 : Math.max(0, item.life / 18);
@@ -1215,7 +1267,7 @@ html, body {
       }
 
       function createEnemy(x, groundY) {
-        const group = new THREE.Group(); group.position.set(x, groundY, 0); scene.add(group);
+        const group = new THREE.Group(); group.position.set(x, groundY, 0); group.scale.set(CHAR_SCALE, CHAR_SCALE, CHAR_SCALE); scene.add(group);
         const e = { x, y: groundY, startX: x, startY: groundY, group, hp: 3, dead: false, frame: 0, attackCooldown: 0, attackTimer: 0, attackType: 'punch', hasHit: false, state: 'idle', battleCryTimeout: null, bubbleTimeout: null, pendingBubbleWord: null };
         enemies.push(e); drawEnemy(e); return e;
       }
@@ -1350,7 +1402,7 @@ html, body {
         cameraShake = Math.max(cameraShake, 0.08);
         playerVelocity.y = 0.18;
         playerVelocity.x = -facingDir * 0.08;
-        burst(playerGroup.position.x, playerGroup.position.y + 1.0, 8);
+        burst(playerGroup.position.x, playerGroup.position.y + 0.78, 8);
         updateUI();
         if (hp <= 0) endGame(msg || 'DEFEATED');
       }
@@ -1428,7 +1480,7 @@ html, body {
               scene.remove(e.group);
               if (e.pendingBubbleWord && !e.bubbleTimeout) {
                 const bubbleX = e.x + 1.05;
-                const bubbleY = e.y + 2.05;
+                const bubbleY = e.y + 1.72;
                 const bubbleWord = e.pendingBubbleWord;
                 e.pendingBubbleWord = null;
                 e.bubbleTimeout = delayed(() => {
@@ -1449,7 +1501,7 @@ html, body {
           const dx = playerGroup.position.x - e.x;
           const dy = feetY() - e.y;
           const dir = dx >= 0 ? 1 : -1;
-          e.group.scale.x = dir;
+          e.group.scale.set(dir * CHAR_SCALE, CHAR_SCALE, CHAR_SCALE);
           e.attackCooldown = Math.max(0, e.attackCooldown - 1);
 
           if (e.attackTimer > 0) {
@@ -1463,10 +1515,10 @@ html, body {
               if (!(keys.ArrowDown && onGround)) {
                 applyDamage(1, 'DEFEATED BY GUARD');
               } else {
-                burst(playerGroup.position.x + facingDir * 0.45, playerGroup.position.y + 1.0, 5);
+                burst(playerGroup.position.x + facingDir * 0.38, playerGroup.position.y + 0.78, 5);
                 playSfx('block');
                 delayed(() => { if (!gameOver && !audio.muted) playSfxImmediate('playerOoh'); }, 50);
-                spawnText('BLOCK', playerGroup.position.x, playerGroup.position.y + 1.6);
+                spawnText('BLOCK', playerGroup.position.x, playerGroup.position.y + 1.22);
               }
             }
 
@@ -1525,7 +1577,7 @@ html, body {
         camera.position.y += (desiredY - camera.position.y) * 0.08;
         camera.position.z += (desiredZ - camera.position.z) * 0.08;
         if (cameraShake > 0) { camera.position.x += (Math.random() - 0.5) * cameraShake; camera.position.y += (Math.random() - 0.5) * cameraShake; cameraShake *= 0.86; }
-        camera.lookAt(target.x, target.y + 0.85, 0);
+        camera.lookAt(target.x, target.y + 0.65, 0);
       }
 
       function updatePerformance(dt) {
@@ -1571,10 +1623,10 @@ html, body {
         document.getElementById('msg').style.display = 'none';
         clearGroup(fxGroup); fx.length = 0;
         potions.forEach(p => { p.collected = false; p.group.position.set(p.x, p.baseY, 0); if (!p.group.parent) scene.add(p.group); if (typeof p.phase !== 'number') p.phase = Math.random() * Math.PI * 2; });
-        enemies.forEach(e => { e.dead = false; e.hp = 3; e.x = e.startX; e.y = e.startY; e.state = 'idle'; e.frame = 0; e.attackCooldown = 0; e.attackTimer = 0; e.attackType = 'punch'; e.hasHit = false; e.battleCryTimeout = null; e.group.position.set(e.startX, e.startY, 0); e.group.scale.x = 1; if (!e.group.parent) scene.add(e.group); drawEnemy(e); });
+        enemies.forEach(e => { e.dead = false; e.hp = 3; e.x = e.startX; e.y = e.startY; e.state = 'idle'; e.frame = 0; e.attackCooldown = 0; e.attackTimer = 0; e.attackType = 'punch'; e.hasHit = false; e.battleCryTimeout = null; e.group.position.set(e.startX, e.startY, 0); e.group.scale.set(CHAR_SCALE, CHAR_SCALE, CHAR_SCALE); if (!e.group.parent) scene.add(e.group); drawEnemy(e); });
         updateUI();
       }
-      function buyHealth() { if (wallet >= 10 && hp < maxHp && !gameOver) { playSfx('buy'); wallet -= 10; hp++; burst(playerGroup.position.x, playerGroup.position.y + 1.4, 7); spawnText('+HP', playerGroup.position.x, playerGroup.position.y + 1.8); updateUI(); } }
+      function buyHealth() { if (wallet >= 10 && hp < maxHp && !gameOver) { playSfx('buy'); wallet -= 10; hp++; burst(playerGroup.position.x, playerGroup.position.y + 1.08, 7); spawnText('+HP', playerGroup.position.x, playerGroup.position.y + 1.38); updateUI(); } }
       function startGame() { unlockAudio(); playSfx('start'); startMusic(); restartGame(); }
 
       window.addEventListener('keydown', e => { unlockAudio(); if (introActive && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); startGame(); return; } keys[e.key] = true; if (e.key === 'r' || e.key === 'R') restartGame(); if (e.key === ' ') e.preventDefault(); });
@@ -1588,6 +1640,8 @@ html, body {
       });
       document.getElementById('startButton').addEventListener('click', startGame);
       document.getElementById('soundButton').addEventListener('click', toggleSound);
+      document.getElementById('musicVolumeSlider').addEventListener('input', e => setMusicVolume(e.target.value));
+      setMusicVolume(document.getElementById('musicVolumeSlider').value);
       document.getElementById('restartButton').addEventListener('click', () => { unlockAudio(); playSfx('start'); restartGame(); });
       document.getElementById('restartTouch').addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); playSfx('start'); restartGame(); });
       document.getElementById('buyButton').addEventListener('click', buyHealth);
