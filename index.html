@@ -6,11 +6,6 @@
   <title>In a Stickman's World</title>
   <style>
     @font-face {
-      font-family: 'StickTitle';
-      src: url('./fonts/title.ttf') format('truetype');
-      font-display: swap;
-    }
-    @font-face {
       font-family: 'StickBubble';
       src: url('./fonts/bubble.ttf') format('truetype');
       font-display: swap;
@@ -186,13 +181,14 @@ html, body {
     }
     #introTitle .smallTitle,
     #introTitle .bigTitle {
-      font-family: 'StickTitle', Georgia, 'Times New Roman', serif;
+      font-family: Georgia, 'Times New Roman', serif;
       font-style: normal;
       font-weight: 400;
     }
     #introTitle .smallTitle {
       font-size: clamp(30px, 5vw, 58px);
-      letter-spacing: 0.04em;
+      letter-spacing: 0.05em;
+      transform: skewX(-8deg);
       border-bottom: 2px solid #000;
       padding-bottom: 6px;
       margin-bottom: 4px;
@@ -469,7 +465,7 @@ html, body {
       </div>
       <div class="utilityCluster">
         <button id="buyButton" class="utilityBtn">Health +1</button>
-        <button id="soundButton" class="utilityBtn" aria-label="Toggle sound">SFX: ON</button>
+        <button id="soundButton" class="utilityBtn" aria-label="Mute or unmute audio">MUTE</button>
         <button id="restartTouch" class="utilityBtn">Restart</button>
       </div>
     </div>
@@ -541,19 +537,61 @@ html, body {
         dragging: false,
         pointerId: null,
         lastX: 0,
-        lastY: 0
+        lastY: 0,
+        pinching: false,
+        pinchStartDistance: 0,
+        pinchStartCameraDistance: 14,
+        pointers: new Map()
       };
+
+      function clampCameraDistance(v) {
+        return Math.max(6.5, Math.min(22, v));
+      }
+
+      function getPinchDistance() {
+        const pts = Array.from(orbit.pointers.values());
+        if (pts.length < 2) return 0;
+        const dx = pts[0].x - pts[1].x;
+        const dy = pts[0].y - pts[1].y;
+        return Math.hypot(dx, dy);
+      }
 
       function setupOrbitInput() {
         renderer.domElement.addEventListener('pointerdown', e => {
           if (introActive || gameOver) return;
+          e.preventDefault();
+          orbit.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+          renderer.domElement.setPointerCapture?.(e.pointerId);
+
+          if (orbit.pointers.size >= 2) {
+            orbit.dragging = false;
+            orbit.pointerId = null;
+            orbit.pinching = true;
+            orbit.pinchStartDistance = Math.max(1, getPinchDistance());
+            orbit.pinchStartCameraDistance = orbit.distance;
+            return;
+          }
+
+          orbit.pinching = false;
           orbit.dragging = true;
           orbit.pointerId = e.pointerId;
           orbit.lastX = e.clientX;
           orbit.lastY = e.clientY;
-          renderer.domElement.setPointerCapture?.(e.pointerId);
         });
+
         renderer.domElement.addEventListener('pointermove', e => {
+          if (introActive || gameOver) return;
+          if (!orbit.pointers.has(e.pointerId)) return;
+          e.preventDefault();
+          orbit.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+          if (orbit.pinching && orbit.pointers.size >= 2) {
+            const currentPinchDistance = Math.max(1, getPinchDistance());
+            const zoomRatio = orbit.pinchStartDistance / currentPinchDistance;
+            orbit.distance = clampCameraDistance(orbit.pinchStartCameraDistance * zoomRatio);
+            return;
+          }
+
           if (!orbit.dragging || e.pointerId !== orbit.pointerId) return;
           const dx = e.clientX - orbit.lastX;
           const dy = e.clientY - orbit.lastY;
@@ -562,18 +600,38 @@ html, body {
           orbit.yaw = Math.max(-0.65, Math.min(0.65, orbit.yaw + dx * 0.004));
           orbit.height = Math.max(0.35, Math.min(3.2, orbit.height - dy * 0.012));
         });
+
         const endOrbitDrag = e => {
-          if (e.pointerId !== orbit.pointerId) return;
-          orbit.dragging = false;
-          orbit.pointerId = null;
+          orbit.pointers.delete(e.pointerId);
           renderer.domElement.releasePointerCapture?.(e.pointerId);
+
+          if (orbit.pinching && orbit.pointers.size < 2) {
+            orbit.pinching = false;
+            orbit.pinchStartDistance = 0;
+            orbit.pinchStartCameraDistance = orbit.distance;
+          }
+
+          if (e.pointerId === orbit.pointerId || orbit.pointers.size === 0) {
+            orbit.dragging = false;
+            orbit.pointerId = null;
+          }
+
+          if (orbit.pointers.size === 1) {
+            const [nextId, pt] = Array.from(orbit.pointers.entries())[0];
+            orbit.dragging = true;
+            orbit.pointerId = nextId;
+            orbit.lastX = pt.x;
+            orbit.lastY = pt.y;
+          }
         };
+
         renderer.domElement.addEventListener('pointerup', endOrbitDrag);
         renderer.domElement.addEventListener('pointercancel', endOrbitDrag);
+        renderer.domElement.addEventListener('pointerleave', endOrbitDrag);
         renderer.domElement.addEventListener('wheel', e => {
           if (introActive || gameOver) return;
           e.preventDefault();
-          orbit.distance = Math.max(9, Math.min(19, orbit.distance + e.deltaY * 0.01));
+          orbit.distance = clampCameraDistance(orbit.distance + e.deltaY * 0.01);
         }, { passive: false });
       }
       setupOrbitInput();
@@ -592,7 +650,6 @@ html, body {
       ];
       if (document.fonts) {
         document.fonts.load('40px "StickBubble"').catch(() => {});
-        document.fonts.load('80px "StickTitle"').catch(() => {});
       }
 
       const audio = { ctx: null, master: null, muted: false, unlocked: false, noiseBuffer: null };
@@ -605,7 +662,7 @@ html, body {
         attackKill: new Audio('./sfx/whoosh%20last%20hit.mp3')
       };
       assetAudio.music.loop = true;
-      assetAudio.music.volume = 0.32;
+      assetAudio.music.volume = 0.16;
       assetAudio.attackAir.volume = 0.78;
       assetAudio.attackHit.volume = 0.9;
       assetAudio.attackKill.volume = 0.95;
@@ -868,7 +925,7 @@ html, body {
       function toggleSound() {
         audio.muted = !audio.muted;
         const btn = document.getElementById('soundButton');
-        if (btn) btn.textContent = audio.muted ? 'SFX: OFF' : 'SFX: ON';
+        if (btn) btn.textContent = audio.muted ? 'UNMUTE' : 'MUTE';
         if (audio.muted) { assetAudio.music.pause(); } else { unlockAudio(); playSfx('coin'); startMusic(); }
       }
 
@@ -1510,7 +1567,7 @@ html, body {
         hp = maxHp; wallet = 50; gameOver = false; facingDir = 1; attackTimer = 0; attackCooldown = 0; attackSoundPlayed = false; damageCooldown = 0; stepTick = 0; footstepSide = 0; lastFootstepFrame = -999; cameraShake = 0; stateFrame = 0; playerState = 'idle'; lowPerfMode = false;
         renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
         snapPlayerToGround(START_X, START_Y);
-        orbit.yaw = 0; orbit.height = 1.35; orbit.distance = 14; camera.position.set(START_X + 2, 4.8, 14); camera.lookAt(START_X, 0.8, 0);
+        orbit.yaw = 0; orbit.height = 1.35; orbit.distance = 14; orbit.dragging = false; orbit.pinching = false; orbit.pointerId = null; orbit.pointers.clear(); camera.position.set(START_X + 2, 4.8, 14); camera.lookAt(START_X, 0.8, 0);
         document.getElementById('msg').style.display = 'none';
         clearGroup(fxGroup); fx.length = 0;
         potions.forEach(p => { p.collected = false; p.group.position.set(p.x, p.baseY, 0); if (!p.group.parent) scene.add(p.group); if (typeof p.phase !== 'number') p.phase = Math.random() * Math.PI * 2; });
@@ -1563,7 +1620,7 @@ html, body {
       buildWorld();
       snapPlayerToGround(START_X, START_Y);
       updateUI();
-      orbit.yaw = 0; orbit.height = 1.35; orbit.distance = 14; camera.position.set(START_X + 2, 4.8, 14); camera.lookAt(START_X, 0.8, 0);
+      orbit.yaw = 0; orbit.height = 1.35; orbit.distance = 14; orbit.dragging = false; orbit.pinching = false; orbit.pointerId = null; orbit.pointers.clear(); camera.position.set(START_X + 2, 4.8, 14); camera.lookAt(START_X, 0.8, 0);
       enemies.forEach(drawEnemy);
       drawStickman();
       animate();
