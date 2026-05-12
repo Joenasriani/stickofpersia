@@ -146,8 +146,8 @@ html, body {
       background: rgba(255,255,255,0.94);
       border: 2px solid #000;
       box-shadow: 8px 8px 0 #000;
-      padding: 14px 22px;
-      width: min(220px, calc(100vw - 140px));
+      padding: 10px 14px;
+      width: min(150px, calc(100vw - 190px));
       aspect-ratio: 4 / 5;
       box-sizing: border-box;
       align-items: center;
@@ -587,7 +587,7 @@ html, body {
       const CHAR_SCALE = 0.72;
       const DESKTOP_CAMERA_DISTANCE = 11.2;
       const DEFAULT_CAMERA_DISTANCE = 14;
-      const PORTRAIT_TOUCH_CAMERA_DISTANCE = 21;
+      const PORTRAIT_TOUCH_CAMERA_DISTANCE = 28;
       const UNIFORM_STROKE_WIDTH = 0.034;
       const UNIFORM_SOFT_STROKE_WIDTH = 0.026;
 
@@ -608,7 +608,7 @@ html, body {
           return { name: 'desktop', defaultDistance: DESKTOP_CAMERA_DISTANCE, minDistance: 7.5, maxDistance: 18 };
         }
         if (isTouchViewport() && isPortraitViewport()) {
-          return { name: 'touchPortrait', defaultDistance: PORTRAIT_TOUCH_CAMERA_DISTANCE, minDistance: 13, maxDistance: 30 };
+          return { name: 'touchPortrait', defaultDistance: PORTRAIT_TOUCH_CAMERA_DISTANCE, minDistance: 18, maxDistance: 46 };
         }
         return { name: 'touchLandscape', defaultDistance: DEFAULT_CAMERA_DISTANCE, minDistance: 6.5, maxDistance: 22 };
       }
@@ -814,8 +814,8 @@ html, body {
       const assetAudio = {
         music: createAudioAsset(AUDIO_PATHS.music, musicVolume, true),
         attackAir: createAudioAsset(AUDIO_PATHS.attackAir, 0.78),
-        attackHit: createAudioAsset(AUDIO_PATHS.attackHit, 0.9),
-        attackKill: createAudioAsset(AUDIO_PATHS.attackKill, 0.95)
+        attackHit: createAudioAsset(AUDIO_PATHS.attackHit, 0.42),
+        attackKill: createAudioAsset(AUDIO_PATHS.attackKill, 0.46)
       };
 
       function playAssetSound(name) {
@@ -978,15 +978,15 @@ html, body {
             break;
           case 'impact':
             // Layered body hit: low thud + crack + grit
-            st(0, 72, 0.12, 'sine', 0.19, -18);
-            st(5, 118, 0.07, 'square', 0.10, -45);
-            sn(0, 0.11, 0.10, 520, 'bandpass');
-            sn(13, 0.05, 0.035, 2300, 'highpass');
+            st(0, 72, 0.12, 'sine', 0.085, -18);
+            st(5, 118, 0.07, 'square', 0.045, -45);
+            sn(0, 0.11, 0.045, 520, 'bandpass');
+            sn(13, 0.05, 0.016, 2300, 'highpass');
             break;
           case 'impactLight':
-            st(0, 94, 0.07, 'sine', 0.13, -24);
-            sn(0, 0.07, 0.06, 620, 'bandpass');
-            sn(8, 0.035, 0.025, 2200, 'highpass');
+            st(0, 94, 0.07, 'sine', 0.06, -24);
+            sn(0, 0.07, 0.028, 620, 'bandpass');
+            sn(8, 0.035, 0.012, 2200, 'highpass');
             break;
           case 'block':
             // Metallic parry: layered ring, short noise splash
@@ -1038,27 +1038,27 @@ html, body {
             break;
           case 'playerOoh':
             // Human-like descending vowel, sequenced instead of chorded
-            st(0, 285, 0.11, 'sine', 0.20, -95);
-            st(62, 175, 0.15, 'sine', 0.16, -48);
-            sn(10, 0.07, 0.028, 430, 'lowpass');
+            st(0, 285, 0.11, 'sine', 0.09, -95);
+            st(62, 175, 0.15, 'sine', 0.072, -48);
+            sn(10, 0.07, 0.013, 430, 'lowpass');
             break;
           case 'playerAah':
             // Sharper hurt vocalization
-            st(0, 355, 0.08, 'sine', 0.21, -125);
-            st(42, 215, 0.14, 'triangle', 0.15, -80);
-            sn(0, 0.10, 0.045, 520, 'bandpass');
+            st(0, 355, 0.08, 'sine', 0.095, -125);
+            st(42, 215, 0.14, 'triangle', 0.068, -80);
+            sn(0, 0.10, 0.020, 520, 'bandpass');
             break;
           case 'enemyOoh':
             // Squeakier enemy pain
-            st(0, 420, 0.09, 'sine', 0.18, -140);
-            st(52, 270, 0.12, 'sine', 0.14, -70);
-            sn(8, 0.055, 0.03, 650, 'lowpass');
+            st(0, 420, 0.09, 'sine', 0.08, -140);
+            st(52, 270, 0.12, 'sine', 0.063, -70);
+            sn(8, 0.055, 0.014, 650, 'lowpass');
             break;
           case 'enemyAah':
             // Comedic death cry with falling saw layer
-            st(0, 560, 0.065, 'sine', 0.20, -190);
-            st(38, 310, 0.18, 'sawtooth', 0.13, -135);
-            sn(0, 0.12, 0.06, 760, 'bandpass');
+            st(0, 560, 0.065, 'sine', 0.09, -190);
+            st(38, 310, 0.18, 'sawtooth', 0.058, -135);
+            sn(0, 0.12, 0.027, 760, 'bandpass');
             break;
           case 'grunt':
             // Short exertion, kept low and dry
@@ -1106,6 +1106,7 @@ html, body {
         }
         if (obj.parent) obj.parent.remove(obj);
         if (obj.geometry && obj.geometry.dispose) obj.geometry.dispose();
+        if (obj.material && obj.material.map && obj.material.map.dispose) obj.material.map.dispose();
         if (obj.material && obj.material.dispose && obj.material !== strokeMat && obj.material !== softStrokeMat) obj.material.dispose();
       }
 
@@ -1953,7 +1954,7 @@ html, body {
 
             // Second staircase to high shelf.
             createStaircase(18.0, 2.05, 11, 0.48, 0.24, 1);
-            createPlatform(23.3, 4.70, 26.2);
+            createPlatform(23.28, 4.70, 26.2);
             createPotion(25.0, 4.70);
 
             // Final drop, second spike pit, and exit door platform.
@@ -2061,7 +2062,6 @@ html, body {
             createPotion(78.2, 1.50);
             createPotion(92.8, 4.75);
             createEnemy(79.0, 1.50);
-            createEnemy(91.7, 4.75);
             createStaircase(81.0, 0, 14, 0.25, 0.2178571429, 1); // ends x 84.5, y 3.05
             createDoor(90.4, 5.55, true);
           }
@@ -2125,7 +2125,6 @@ html, body {
             createPotion(112.8, 1.75);
             createPotion(121.0, 5.75);
             createEnemy(113.8, 1.75);
-            createEnemy(120.2, 5.75);
             createDoor(119.8, 6.55, true);
           }
         },
@@ -2199,7 +2198,6 @@ html, body {
             createPlatform(149.0, 6.75, 156.2);
             createPotion(150.0, 2.05);
             createPotion(154.0, 6.75);
-            createEnemy(151.4, 6.75);
             createDoor(151.8, 7.55, true);
           }
 
@@ -2564,21 +2562,96 @@ html, body {
           }
         }
       }
+      function findAttackSurfaceAt(x, y, tolerance = 0.72) {
+        let best = null;
+        let bestDelta = Infinity;
+
+        for (const p of platforms) {
+          const a = Math.min(p.x1, p.x2);
+          const b = Math.max(p.x1, p.x2);
+          if (x < a - 0.18 || x > b + 0.18) continue;
+          const delta = Math.abs(y - p.y);
+          if (delta <= tolerance && delta < bestDelta) {
+            best = { type: 'platform', x1: a, x2: b, y1: p.y, y2: p.y, source: p };
+            bestDelta = delta;
+          }
+        }
+
+        for (const stair of stairs) {
+          const a = Math.min(stair.x1, stair.x2);
+          const b = Math.max(stair.x1, stair.x2);
+          if (x < a - 0.22 || x > b + 0.22) continue;
+          const sy = stairYAt(stair, x);
+          const delta = Math.abs(y - sy);
+          if (delta <= tolerance && delta < bestDelta) {
+            best = { type: 'stair', x1: a, x2: b, y1: Math.min(stair.startY, stair.endY), y2: Math.max(stair.startY, stair.endY), source: stair };
+            bestDelta = delta;
+          }
+        }
+
+        return best;
+      }
+
+      function surfacesOverlapInX(a, b, tolerance = 0.18) {
+        if (!a || !b) return false;
+        return Math.max(a.x1, b.x1) <= Math.min(a.x2, b.x2) + tolerance;
+      }
+
+      function stairConnectsAttackPath(playerSurface, enemySurface, playerX, enemyX) {
+        if (!playerSurface || !enemySurface) return false;
+        for (const stair of stairs) {
+          const sx1 = Math.min(stair.x1, stair.x2);
+          const sx2 = Math.max(stair.x1, stair.x2);
+          const lowY = Math.min(stair.startY, stair.endY);
+          const highY = Math.max(stair.startY, stair.endY);
+          const yConnects = Math.abs(lowY - playerSurface.y1) <= 0.55 && Math.abs(highY - enemySurface.y1) <= 0.75;
+          const reverseYConnects = Math.abs(highY - playerSurface.y1) <= 0.55 && Math.abs(lowY - enemySurface.y1) <= 0.75;
+          const playerCanReachStair = playerX >= sx1 - 0.65 && playerX <= sx2 + 0.65;
+          const enemyCanReachStair = enemyX >= sx1 - 0.65 && enemyX <= sx2 + 0.65;
+          const stairTouchesBoth = surfacesOverlapInX(playerSurface, { x1: sx1, x2: sx2 }, 0.45) && surfacesOverlapInX(enemySurface, { x1: sx1, x2: sx2 }, 0.45);
+          if ((yConnects || reverseYConnects) && (stairTouchesBoth || (playerCanReachStair && enemyCanReachStair))) return true;
+        }
+        return false;
+      }
+
+      function upwardAttackHasSolidConnection(enemy) {
+        const playerFeetY = feetY();
+        const playerX = playerGroup.position.x;
+        const enemyX = enemy.x;
+        const playerSurface = findAttackSurfaceAt(playerX, playerFeetY, onGround ? 0.78 : 1.55);
+        const enemySurface = findAttackSurfaceAt(enemyX, enemy.y, 0.82);
+
+        // Same-column shelves count as connected only when the current floor and
+        // enemy floor overlap on the X axis. This prevents sword hits through an
+        // empty horizontal gap while still allowing close vertical tier combat.
+        if (playerSurface && enemySurface && surfacesOverlapInX(playerSurface, enemySurface, 0.22)) return true;
+
+        // Stairs are authored as solid walkable ramps, so a stair connection keeps
+        // upward attacks valid even when the player is standing on or beside the stair.
+        if (stairConnectsAttackPath(playerSurface, enemySurface, playerX, enemyX)) return true;
+
+        // If the player is airborne, allow upward hit only when both characters are
+        // still inside the same visible solid X range. Do not allow cross-gap hits.
+        if (!playerSurface && enemySurface && playerX >= enemySurface.x1 - 0.22 && playerX <= enemySurface.x2 + 0.22) return true;
+
+        return false;
+      }
+
       function checkEnemyHit() {
         if (attackTimer < ATTACK_STRIKE_END || attackTimer > ATTACK_STRIKE_START) return;
 
         const reachX = playerGroup.position.x + facingDir * 0.82;
         const playerFeetY = feetY();
-        const playerHeadY = playerFeetY + (1.62 * CHAR_SCALE);
-        const upwardAttackLimitY = playerHeadY + 1.8;
+        const upwardAttackLimitY = playerFeetY + 2.2;
         let didHit = false;
 
         for (const e of enemies) {
           const horizontalReach = Math.abs(reachX - e.x) < 1.05;
-          const sameLevelReach = Math.abs(playerFeetY - e.y) < 1.1;
-          const upwardReach = e.y > playerFeetY && e.y <= upwardAttackLimitY;
+          const sameLevelOrDownwardReach = e.y <= playerFeetY && Math.abs(playerFeetY - e.y) < 1.1;
+          const sameLevelHighReach = e.y > playerFeetY && Math.abs(playerFeetY - e.y) < 1.1;
+          const upwardReach = e.y > playerFeetY && e.y <= upwardAttackLimitY && upwardAttackHasSolidConnection(e);
 
-          if (!e.dead && e.state !== 'death' && horizontalReach && (sameLevelReach || upwardReach)) {
+          if (!e.dead && e.state !== 'death' && horizontalReach && (sameLevelOrDownwardReach || sameLevelHighReach || upwardReach)) {
             didHit = true;
             attackSoundPlayed = true;
 
