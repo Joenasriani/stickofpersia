@@ -466,6 +466,66 @@ html, body {
         padding: 18px 22px;
         z-index: 45;
       }
+      #levelBanner {
+        width: auto;
+        min-width: clamp(120px, 18vw, 190px);
+        max-width: calc(100vw - 260px);
+        height: clamp(48px, 15vh, 74px);
+        min-height: 0;
+        aspect-ratio: auto;
+        padding: 6px 16px;
+        box-shadow: 5px 5px 0 #000;
+        white-space: nowrap;
+        line-height: 1;
+      }
+      #intro {
+        padding: calc(8px + env(safe-area-inset-top, 0px)) calc(12px + env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) calc(12px + env(safe-area-inset-left, 0px));
+        box-sizing: border-box;
+      }
+      #introCard {
+        width: min(560px, calc(100vw - 88px));
+        max-height: calc(100dvh - 20px);
+        padding: clamp(8px, 2.2vh, 14px);
+        box-shadow: 5px 5px 0 #000;
+        overflow: hidden;
+      }
+      #introTitle {
+        gap: clamp(2px, 0.9vh, 5px);
+      }
+      #introTitle .smallTitle {
+        font-size: clamp(20px, 7vh, 34px);
+        padding-bottom: clamp(2px, 0.8vh, 4px);
+        margin-bottom: clamp(1px, 0.5vh, 2px);
+      }
+      #introTitle .bigTitle {
+        font-size: clamp(34px, 13vh, 58px);
+        line-height: 0.82;
+        text-shadow: 2px 2px 0 rgba(0,0,0,0.12);
+      }
+      #introSubtitle {
+        font-size: clamp(8px, 2.4vh, 10px);
+        letter-spacing: clamp(1.4px, 0.5vw, 2px);
+        padding: clamp(4px, 1.3vh, 6px) 0;
+        margin: clamp(6px, 1.8vh, 9px) 0;
+      }
+      #introText {
+        min-height: 0;
+        margin-top: clamp(6px, 1.7vh, 9px);
+        font-size: clamp(10px, 2.8vh, 13px);
+        line-height: 1.25;
+      }
+      #introPrompt {
+        margin-top: clamp(6px, 1.7vh, 9px);
+        gap: 8px;
+        font-size: clamp(8px, 2.3vh, 10px);
+        letter-spacing: clamp(0.8px, 0.28vw, 1.2px);
+      }
+      #startButton {
+        font-size: clamp(11px, 2.8vh, 13px);
+        padding: clamp(6px, 1.7vh, 8px) 12px;
+        min-width: 132px;
+        box-shadow: 3px 3px 0 #000;
+      }
     }
 
     @media (max-width: 430px) {
@@ -579,6 +639,7 @@ html, body {
       let onGround = true, facingDir = 1, playerState = 'idle', animTime = 0, stateFrame = 0;
       let attackTimer = 0, attackCooldown = 0, damageCooldown = 0, cameraShake = 0;
       let attackSoundPlayed = false;
+      let attackVisualAimDy = 0;
       let stepTick = 0;
       let footstepSide = 0;
       let lastFootstepFrame = -999;
@@ -814,8 +875,8 @@ html, body {
       const assetAudio = {
         music: createAudioAsset(AUDIO_PATHS.music, musicVolume, true),
         attackAir: createAudioAsset(AUDIO_PATHS.attackAir, 0.78),
-        attackHit: createAudioAsset(AUDIO_PATHS.attackHit, 0.42),
-        attackKill: createAudioAsset(AUDIO_PATHS.attackKill, 0.46)
+        attackHit: createAudioAsset(AUDIO_PATHS.attackHit, 0.30),
+        attackKill: createAudioAsset(AUDIO_PATHS.attackKill, 0.34)
       };
 
       function playAssetSound(name) {
@@ -978,15 +1039,15 @@ html, body {
             break;
           case 'impact':
             // Layered body hit: low thud + crack + grit
-            st(0, 72, 0.12, 'sine', 0.085, -18);
-            st(5, 118, 0.07, 'square', 0.045, -45);
-            sn(0, 0.11, 0.045, 520, 'bandpass');
-            sn(13, 0.05, 0.016, 2300, 'highpass');
+            st(0, 72, 0.12, 'sine', 0.060, -18);
+            st(5, 118, 0.07, 'square', 0.032, -45);
+            sn(0, 0.11, 0.032, 520, 'bandpass');
+            sn(13, 0.05, 0.011, 2300, 'highpass');
             break;
           case 'impactLight':
-            st(0, 94, 0.07, 'sine', 0.06, -24);
-            sn(0, 0.07, 0.028, 620, 'bandpass');
-            sn(8, 0.035, 0.012, 2200, 'highpass');
+            st(0, 94, 0.07, 'sine', 0.042, -24);
+            sn(0, 0.07, 0.020, 620, 'bandpass');
+            sn(8, 0.035, 0.008, 2200, 'highpass');
             break;
           case 'block':
             // Metallic parry: layered ring, short noise splash
@@ -1038,27 +1099,27 @@ html, body {
             break;
           case 'playerOoh':
             // Human-like descending vowel, sequenced instead of chorded
-            st(0, 285, 0.11, 'sine', 0.09, -95);
-            st(62, 175, 0.15, 'sine', 0.072, -48);
-            sn(10, 0.07, 0.013, 430, 'lowpass');
+            st(0, 285, 0.11, 'sine', 0.064, -95);
+            st(62, 175, 0.15, 'sine', 0.051, -48);
+            sn(10, 0.07, 0.009, 430, 'lowpass');
             break;
           case 'playerAah':
             // Sharper hurt vocalization
-            st(0, 355, 0.08, 'sine', 0.095, -125);
-            st(42, 215, 0.14, 'triangle', 0.068, -80);
-            sn(0, 0.10, 0.020, 520, 'bandpass');
+            st(0, 355, 0.08, 'sine', 0.067, -125);
+            st(42, 215, 0.14, 'triangle', 0.048, -80);
+            sn(0, 0.10, 0.014, 520, 'bandpass');
             break;
           case 'enemyOoh':
             // Squeakier enemy pain
-            st(0, 420, 0.09, 'sine', 0.08, -140);
-            st(52, 270, 0.12, 'sine', 0.063, -70);
-            sn(8, 0.055, 0.014, 650, 'lowpass');
+            st(0, 420, 0.09, 'sine', 0.056, -140);
+            st(52, 270, 0.12, 'sine', 0.044, -70);
+            sn(8, 0.055, 0.010, 650, 'lowpass');
             break;
           case 'enemyAah':
             // Comedic death cry with falling saw layer
-            st(0, 560, 0.065, 'sine', 0.09, -190);
-            st(38, 310, 0.18, 'sawtooth', 0.058, -135);
-            sn(0, 0.12, 0.027, 760, 'bandpass');
+            st(0, 560, 0.065, 'sine', 0.064, -190);
+            st(38, 310, 0.18, 'sawtooth', 0.041, -135);
+            sn(0, 0.12, 0.019, 760, 'bandpass');
             break;
           case 'grunt':
             // Short exertion, kept low and dry
@@ -1365,12 +1426,16 @@ html, body {
         }
         if (state === 'attack') {
           const strike = attackTimer <= ATTACK_STRIKE_START && attackTimer >= ATTACK_STRIKE_END;
+          const aimDy = strike ? Math.max(-0.75, Math.min(1.05, attackVisualAimDy)) : 0;
+          const handAimY = aimDy * 0.48;
+          const swordAimY = aimDy * 0.74;
           p.head = [0.08 * s, 1.56]; p.neck = [0.05 * s, 1.38]; p.hip = [-0.02 * s, 0.84];
-          p.a1 = strike ? [0.36 * s, 1.30] : [-0.32 * s, 1.45];
-          p.h1 = strike ? [0.62 * s, 1.08] : [-0.48 * s, 1.58];
-          p.sword = strike ? [1.38 * s, 0.90] : [-0.9 * s, 1.80];
+          p.a1 = strike ? [0.36 * s, 1.30 + handAimY * 0.35] : [-0.32 * s, 1.45];
+          p.h1 = strike ? [0.62 * s, 1.08 + handAimY] : [-0.48 * s, 1.58];
+          p.sword = strike ? [1.38 * s, 0.90 + swordAimY] : [-0.9 * s, 1.80];
           p.sheathedSword = false;
           p.smear = strike && !lowPerfMode;
+          p.smearEnd = strike ? [1.20 * s, 1.22 + swordAimY * 0.82] : null;
           p.k1 = [0.34 * s, 0.48]; p.f1 = [0.60 * s, 0]; p.k2 = [-0.18 * s, 0.48]; p.f2 = [-0.35 * s, 0];
         }
         if (state === 'hit') {
@@ -1396,7 +1461,10 @@ html, body {
           const swordStart = p.sheathedSword ? [0.28 * facingDir, 1.05] : p.h1;
           addLineTo(stickParts, [v(swordStart), v(p.sword)]);
         }
-        if (p.smear) addLineTo(stickParts, [new THREE.Vector3(0.32 * facingDir, 1.40, 0), new THREE.Vector3(1.20 * facingDir, 1.22, 0)], softStrokeMat);
+        if (p.smear) {
+          const smearEnd = p.smearEnd || [1.20 * facingDir, 1.22];
+          addLineTo(stickParts, [new THREE.Vector3(0.32 * facingDir, 1.40, 0), new THREE.Vector3(smearEnd[0], smearEnd[1], 0)], softStrokeMat);
+        }
         if (state === 'block') addLineTo(stickParts, [new THREE.Vector3(0.48 * facingDir, 1.32, 0), new THREE.Vector3(0.75 * facingDir, 1.12, 0), new THREE.Vector3(0.62 * facingDir, 0.82, 0), new THREE.Vector3(0.40 * facingDir, 0.96, 0), new THREE.Vector3(0.48 * facingDir, 1.32, 0)]);
       }
 
@@ -1503,7 +1571,7 @@ html, body {
 
       function createEnemy(x, groundY) {
         const group = new THREE.Group(); group.position.set(x, groundY, 0); group.scale.set(CHAR_SCALE, CHAR_SCALE, CHAR_SCALE); scene.add(group);
-        const e = { x, y: groundY, startX: x, startY: groundY, group, hp: 3, dead: false, frame: 0, attackCooldown: 0, attackTimer: 0, attackType: 'punch', hasHit: false, state: 'idle', battleCryTimeout: null, bubbleTimeout: null, pendingBubbleWord: null };
+        const e = { x, y: groundY, startX: x, startY: groundY, group, hp: 3, dead: false, frame: 0, attackCooldown: 0, attackTimer: 0, attackType: 'punch', hasHit: false, state: 'idle', battleCryTimeout: null, bubbleTimeout: null, pendingBubbleWord: null, bubbleSpawned: false };
         enemies.push(e); drawEnemy(e); return e;
       }
 
@@ -2637,6 +2705,42 @@ html, body {
         return false;
       }
 
+      function updateAttackVisualAim() {
+        attackVisualAimDy = 0;
+        if (attackTimer < ATTACK_STRIKE_END || attackTimer > ATTACK_STRIKE_START) return;
+
+        const reachX = playerGroup.position.x + facingDir * 0.82;
+        const playerFeetY = feetY();
+        const upwardAttackLimitY = playerFeetY + 2.2;
+        let best = null;
+        let bestScore = Infinity;
+
+        for (const e of enemies) {
+          if (e.dead || e.state === 'death') continue;
+
+          const horizontalReach = Math.abs(reachX - e.x) < 1.05;
+          if (!horizontalReach) continue;
+
+          const sameLevelOrDownwardReach = e.y <= playerFeetY && Math.abs(playerFeetY - e.y) < 1.1;
+          const sameLevelHighReach = e.y > playerFeetY && Math.abs(playerFeetY - e.y) < 1.1;
+          const upwardReach = e.y > playerFeetY && e.y <= upwardAttackLimitY && upwardAttackHasSolidConnection(e);
+          if (!(sameLevelOrDownwardReach || sameLevelHighReach || upwardReach)) continue;
+
+          const verticalDelta = e.y - playerFeetY;
+          const score = Math.abs(reachX - e.x) + Math.abs(verticalDelta) * 0.18;
+          if (score < bestScore) {
+            bestScore = score;
+            best = verticalDelta;
+          }
+        }
+
+        if (best === null || Math.abs(best) < 0.35) {
+          attackVisualAimDy = 0;
+        } else {
+          attackVisualAimDy = best;
+        }
+      }
+
       function checkEnemyHit() {
         if (attackTimer < ATTACK_STRIKE_END || attackTimer > ATTACK_STRIKE_START) return;
 
@@ -2669,7 +2773,10 @@ html, body {
 
             if (e.hp <= 0) {
               playAssetSound('attackKill');
-              e.pendingBubbleWord = enemyBubbleWords[Math.floor(Math.random() * enemyBubbleWords.length)];
+              if (!e.bubbleSpawned) {
+                e.bubbleSpawned = true;
+                e.pendingBubbleWord = enemyBubbleWords[Math.floor(Math.random() * enemyBubbleWords.length)];
+              }
               delayed(() => {
                 if (!gameOver) {
                   playSfx('coin');
@@ -2711,7 +2818,7 @@ html, body {
                     const side = facingDir >= 0 ? 1 : -1;
                     const tailSide = side >= 0 ? 'left' : 'right';
                     const bubbleX = playerGroup.position.x + side * 1.25;
-                    const bubbleY = playerGroup.position.y + 3.05;
+                    const bubbleY = playerGroup.position.y + 4.30;
                     spawnSpeechBubble(bubbleWord, bubbleX, bubbleY, tailSide);
                   }
                 }, 500);
@@ -2951,7 +3058,7 @@ html, body {
         } else {
           enemies.forEach(e => { if (!e.dead) drawEnemy(e); });
         }
-        updateWorldDetails(frameScale); updateFX(); updateCamera(); drawStickman(); renderer.render(scene, camera);
+        updateAttackVisualAim(); updateWorldDetails(frameScale); updateFX(); updateCamera(); drawStickman(); renderer.render(scene, camera);
       }
 
       function initializeGame() {
