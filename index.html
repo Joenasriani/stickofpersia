@@ -146,7 +146,12 @@ html, body {
       background: rgba(255,255,255,0.94);
       border: 2px solid #000;
       box-shadow: 8px 8px 0 #000;
-      padding: 18px 28px;
+      padding: 14px 22px;
+      width: min(220px, calc(100vw - 140px));
+      aspect-ratio: 4 / 5;
+      box-sizing: border-box;
+      align-items: center;
+      justify-content: center;
       font-family: monospace;
       font-size: clamp(22px, 5vw, 42px);
       font-weight: 900;
@@ -253,13 +258,6 @@ html, body {
       padding: 10px 0;
       margin: 18px 0 18px;
     }
-    #introScene { height: 150px; border: 2px solid #000; position: relative; overflow: hidden; background: #fff; }
-    .palaceLine { position: absolute; background: #000; }
-    .palaceLine.floor { left: 0; right: 0; bottom: 36px; height: 2px; }
-    .palaceLine.arch1 { left: 52px; bottom: 36px; width: 2px; height: 86px; }
-    .palaceLine.arch2 { left: 118px; bottom: 36px; width: 2px; height: 86px; }
-    .palaceLine.arch3 { left: 52px; bottom: 120px; width: 68px; height: 2px; }
-    .palaceLine.window { right: 56px; top: 34px; width: 48px; height: 76px; border: 2px solid #000; background: transparent; }
     #introText { margin-top: 18px; min-height: 64px; font-size: 15px; line-height: 1.5; }
     #introPrompt {
       margin-top: 18px;
@@ -278,48 +276,6 @@ html, body {
       min-width: 148px;
     }
 
-    .introStick {
-      position: absolute;
-      bottom: 36px;
-      width: 54px;
-      height: 110px;
-      transform-origin: 50% 100%;
-      animation: none;
-    }
-    .introStick.prince {
-      left: 66%;
-      transform: translateX(-50%);
-    }
-    .introStick.guard {
-      right: 52px;
-      transform: scaleX(-1);
-    }
-    .introStick .head {
-      position: absolute; left: 20px; top: 10px; width: 18px; height: 18px;
-      border: 2px solid #000; border-radius: 50%; background: #fff;
-    }
-    .introStick .body, .introStick .arm, .introStick .leg, .introStick .sword {
-      position: absolute; background: #000; height: 2px; transform-origin: 0 50%;
-    }
-    .introStick .body { left: 29px; top: 30px; width: 46px; transform: rotate(90deg); }
-    .introStick .arm.a1 { left: 29px; top: 45px; width: 34px; transform: rotate(32deg); }
-    .introStick .arm.a2 { left: 29px; top: 45px; width: 30px; transform: rotate(138deg); }
-    .introStick .leg.l1 { left: 29px; top: 78px; width: 38px; transform: rotate(78deg); }
-    .introStick .leg.l2 { left: 29px; top: 78px; width: 38px; transform: rotate(108deg); }
-    .introStick .sword { left: 46px; top: 42px; width: 42px; transform: rotate(-18deg); }
-    .introDust { display: none; }
-
-    /* Static start screen: no animated scene, no moving title elements */
-    #intro *, #intro *::before, #intro *::after {
-      animation: none !important;
-      transition: none !important;
-    }
-    #introScene,
-    .palaceLine,
-    .introStick,
-    .introDust {
-      display: none !important;
-    }
     #introCard {
       min-height: 0;
     }
@@ -576,7 +532,7 @@ html, body {
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
-    (function bootstrapStickGame() {
+    (function () {
       'use strict';
 
       if (!window.THREE) {
@@ -600,13 +556,14 @@ html, body {
       scene.background = new THREE.Color(0xffffff);
       const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 80);
       const renderer = new THREE.WebGLRenderer({ antialias: true });
+      // Fixed renderer pixel ratio keeps WebGL line strokes visually consistent across levels.
       renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
       renderer.setSize(innerWidth, innerHeight);
       document.body.appendChild(renderer.domElement);
 
       const clock = new THREE.Clock();
-      const strokeMat = new THREE.LineBasicMaterial({ color: 0x000000 });
-      const softStrokeMat = new THREE.LineBasicMaterial({ color: 0x777777, transparent: true, opacity: 0.45 });
+      const strokeMat = new THREE.LineBasicMaterial({ color: 0x000000, depthTest: false, depthWrite: false });
+      const softStrokeMat = new THREE.LineBasicMaterial({ color: 0x777777, transparent: true, opacity: 0.45, depthTest: false, depthWrite: false });
       const keys = {};
 
       const GRAVITY = -0.032;
@@ -616,11 +573,9 @@ html, body {
       const ATTACK_COOLDOWN_FRAMES = 8;
       const ATTACK_STRIKE_START = 7;
       const ATTACK_STRIKE_END = 4;
-      const START_X = -7;
-      const START_Y = 0;
 
       let currentLevelIndex = 0;
-      let hp = 5, wallet = 50, gameOver = false, introActive = true;
+      let hp = 5, wallet = 50, gameOver = false, introActive = true, levelBannerActive = false;
       let onGround = true, facingDir = 1, playerState = 'idle', animTime = 0, stateFrame = 0;
       let attackTimer = 0, attackCooldown = 0, damageCooldown = 0, cameraShake = 0;
       let attackSoundPlayed = false;
@@ -632,14 +587,34 @@ html, body {
       const CHAR_SCALE = 0.72;
       const DESKTOP_CAMERA_DISTANCE = 11.2;
       const DEFAULT_CAMERA_DISTANCE = 14;
-      const DESKTOP_STROKE_OFFSET = 0.018;
+      const PORTRAIT_TOUCH_CAMERA_DISTANCE = 21;
+      const UNIFORM_STROKE_WIDTH = 0.034;
+      const UNIFORM_SOFT_STROKE_WIDTH = 0.026;
 
       function isDesktopViewport() {
         return window.matchMedia && window.matchMedia('(min-width: 901px) and (pointer: fine)').matches;
       }
 
+      function isTouchViewport() {
+        return window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+      }
+
+      function isPortraitViewport() {
+        return innerHeight > innerWidth;
+      }
+
+      function getCameraProfile() {
+        if (isDesktopViewport()) {
+          return { name: 'desktop', defaultDistance: DESKTOP_CAMERA_DISTANCE, minDistance: 7.5, maxDistance: 18 };
+        }
+        if (isTouchViewport() && isPortraitViewport()) {
+          return { name: 'touchPortrait', defaultDistance: PORTRAIT_TOUCH_CAMERA_DISTANCE, minDistance: 13, maxDistance: 30 };
+        }
+        return { name: 'touchLandscape', defaultDistance: DEFAULT_CAMERA_DISTANCE, minDistance: 6.5, maxDistance: 22 };
+      }
+
       function getDefaultCameraDistance() {
-        return isDesktopViewport() ? DESKTOP_CAMERA_DISTANCE : DEFAULT_CAMERA_DISTANCE;
+        return getCameraProfile().defaultDistance;
       }
 
       let fpsFrames = 0, fpsTime = 0, currentFPS = 60, lowPerfMode = false;
@@ -669,11 +644,11 @@ html, body {
         panY: 0,
         pointers: new Map()
       };
+      let currentCameraProfileName = getCameraProfile().name;
 
       function clampCameraDistance(v) {
-        const minDistance = isDesktopViewport() ? 7.5 : 6.5;
-        const maxDistance = isDesktopViewport() ? 18 : 22;
-        return Math.max(minDistance, Math.min(maxDistance, v));
+        const profile = getCameraProfile();
+        return Math.max(profile.minDistance, Math.min(profile.maxDistance, v));
       }
 
       function getPinchDistance() {
@@ -792,6 +767,7 @@ html, body {
       const fxGroup = new THREE.Group();
       scene.add(fxGroup);
       const platforms = [], stairs = [], spikes = [], potions = [], enemies = [], doors = [], fx = [], levelDecor = [];
+      const boulders = [], swingingAxes = [], sawBlades = [], rollingLogs = [], crushingWalls = [], windEmitters = [], spearTurrets = [];
       const enemyBubbleWords = [
         "Who's YouR DAddY",
         "Soft People!",
@@ -870,11 +846,6 @@ html, body {
         }
       }
 
-      function pauseMusic() {
-        try {
-          assetAudio.music.pause();
-        } catch (e) {}
-      }
 
       function unlockAudio() {
         if (audio.muted) return false;
@@ -1128,37 +1099,84 @@ html, body {
         if (audio.muted) { assetAudio.music.pause(); } else { unlockAudio(); playSfx('coin'); startMusic(); }
       }
 
-      function clearGroup(group) {
-        while (group.children.length) {
-          const child = group.children.pop();
-          if (child.geometry) child.geometry.dispose();
-          if (child.material && child.material.dispose) child.material.dispose();
-          group.remove(child);
+      function disposeObjectTree(obj) {
+        if (!obj) return;
+        if (obj.children && obj.children.length) {
+          while (obj.children.length) disposeObjectTree(obj.children.pop());
         }
+        if (obj.parent) obj.parent.remove(obj);
+        if (obj.geometry && obj.geometry.dispose) obj.geometry.dispose();
+        if (obj.material && obj.material.dispose && obj.material !== strokeMat && obj.material !== softStrokeMat) obj.material.dispose();
       }
 
-      function makeOffsetPoints(pts, dx, dy) {
-        return pts.map(p => new THREE.Vector3(p.x + dx, p.y + dy, p.z));
+      function clearGroup(group) {
+        while (group.children.length) disposeObjectTree(group.children.pop());
       }
 
-      function addSingleLine(group, pts, mat) {
-        const geo = new THREE.BufferGeometry().setFromPoints(pts);
-        const line = new THREE.Line(geo, mat);
-        group.add(line);
-        return line;
+
+      function getStrokeStyle(mat) {
+        const isSoft = mat === softStrokeMat;
+        const color = mat && mat.color ? mat.color.getHex() : 0x000000;
+        const opacity = mat && mat.transparent ? (Number.isFinite(mat.opacity) ? mat.opacity : 0.45) : 1;
+        return {
+          width: isSoft ? UNIFORM_SOFT_STROKE_WIDTH : UNIFORM_STROKE_WIDTH,
+          material: new THREE.MeshBasicMaterial({
+            color,
+            transparent: opacity < 1,
+            opacity,
+            depthTest: false,
+            depthWrite: false,
+            side: THREE.DoubleSide
+          })
+        };
+      }
+
+      function addStrokeSegment(parent, a, b, style) {
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const len = Math.hypot(dx, dy);
+        if (len < 0.0001) return null;
+        const geo = new THREE.PlaneGeometry(len, style.width);
+        const mesh = new THREE.Mesh(geo, style.material.clone());
+        mesh.position.set((a.x + b.x) * 0.5, (a.y + b.y) * 0.5, Math.max(a.z || 0, b.z || 0));
+        mesh.rotation.z = Math.atan2(dy, dx);
+        mesh.renderOrder = 10;
+        parent.add(mesh);
+        return mesh;
+      }
+
+      function addStrokeCap(parent, p, style) {
+        const geo = new THREE.CircleGeometry(style.width * 0.5, 10);
+        const cap = new THREE.Mesh(geo, style.material.clone());
+        cap.position.set(p.x, p.y, p.z || 0);
+        cap.renderOrder = 10;
+        parent.add(cap);
+        return cap;
+      }
+
+      function addSingleLine(group, pts, mat = strokeMat) {
+        // Use thin mesh strokes instead of WebGL native lines.
+        // Native THREE.Line/LineBasicMaterial renders inconsistently across browsers,
+        // DPI settings, camera tilt, and adjacent stair segments. This keeps every
+        // floor, tier, stair, character limb, ring, spike, and door stroke visually uniform.
+        const strokeGroup = new THREE.Group();
+        const style = getStrokeStyle(mat);
+        let segments = 0;
+        for (let i = 0; i < pts.length - 1; i++) {
+          if (addStrokeSegment(strokeGroup, pts[i], pts[i + 1], style)) segments++;
+        }
+        if (segments > 0) {
+          addStrokeCap(strokeGroup, pts[0], style);
+          addStrokeCap(strokeGroup, pts[pts.length - 1], style);
+        }
+        // Dispose the un-cloned style material holder. Segment/cap meshes own clones.
+        if (style.material && style.material.dispose) style.material.dispose();
+        group.add(strokeGroup);
+        return strokeGroup;
       }
 
       function addLineTo(group, pts, mat = strokeMat) {
-        // Desktop browsers render WebGL lineWidth inconsistently, so on large
-        // pointer-precise screens we duplicate tiny offsets to create a stable
-        // thicker stroke without changing collisions or gameplay geometry.
-        const primary = addSingleLine(group, pts, mat);
-        if (isDesktopViewport()) {
-          const o = DESKTOP_STROKE_OFFSET;
-          addSingleLine(group, makeOffsetPoints(pts, 0, o), mat);
-          addSingleLine(group, makeOffsetPoints(pts, 0, -o), mat);
-        }
-        return primary;
+        return addSingleLine(group, pts, mat);
       }
 
       function drawCircle(group, cx, cy, r, mat = strokeMat) {
@@ -1382,37 +1400,58 @@ html, body {
       }
 
       function createPlatform(x1, y, x2) {
-        const line = addLineTo(scene, [new THREE.Vector3(x1, y, 0), new THREE.Vector3(x2, y, 0)], strokeMat);
-        platforms.push({ x1, x2, y, line });
-      }
-
-      function createDecorLine(x1, y1, x2, y2) {
-        const line = addLineTo(scene, [new THREE.Vector3(x1, y1, 0), new THREE.Vector3(x2, y2, 0)], strokeMat);
-        levelDecor.push(line);
+        // One visible pencil line, one rigid hidden collider.
+        // Do not draw any duplicate strokes or thickness rectangles.
+        const a = Math.min(x1, x2);
+        const b = Math.max(x1, x2);
+        if (Math.abs(b - a) < 0.08) return null;
+        const line = addLineTo(scene, [new THREE.Vector3(a, y, 0.02), new THREE.Vector3(b, y, 0.02)], strokeMat);
+        platforms.push({ x1: a, x2: b, y, line, rigid: true });
         return line;
       }
 
+
       function createStaircase(x, y, steps, stepW, stepH, direction = 1) {
-        const rawEndX = x + direction * steps * stepW;
-        const minX = Math.min(x, rawEndX);
-        const maxX = Math.max(x, rawEndX);
+        const cleanSteps = Math.max(2, Math.round(steps || 2));
+        const dir = direction >= 0 ? 1 : -1;
+        const startX = x;
         const startY = y;
-        const endY = y + steps * stepH;
+        const endX = x + dir * cleanSteps * stepW;
+        const endY = y + cleanSteps * stepH;
+        const minX = Math.min(startX, endX);
+        const maxX = Math.max(startX, endX);
 
-        // Visual stair lines remain individual steps, but a single hidden ramp collider
-        // is added so the player walks up/down stairs without falling between step edges.
-        stairs.push({ x1: minX, x2: maxX, y1: startY, y2: endY, direction, stepW, stepH, steps });
+        // One hidden continuous ramp collider per staircase.
+        // The visible stair remains one pencil polyline. The collision stays rigid
+        // across the whole stair span, so no level can have fall-through stair gaps.
+        stairs.push({
+          x1: minX,
+          x2: maxX,
+          startX,
+          startY,
+          endX,
+          endY,
+          y1: startY,
+          y2: endY,
+          direction: dir,
+          stepW,
+          stepH,
+          steps: cleanSteps,
+          rigid: true
+        });
 
-        for (let i = 0; i < steps; i++) {
-          const x1 = x + direction * i * stepW;
-          const x2 = x + direction * (i + 1) * stepW;
-          const sx1 = Math.min(x1, x2);
-          const sx2 = Math.max(x1, x2);
-          const sy = y + (i + 1) * stepH;
-          createPlatform(sx1, sy, sx2);
-          const riserX = direction > 0 ? sx1 : sx2;
-          createDecorLine(riserX, sy - stepH, riserX, sy);
+        // Visible stair drawing: one continuous pencil polyline only.
+        const pts = [new THREE.Vector3(startX, startY, 0.02)];
+        for (let i = 0; i < cleanSteps; i++) {
+          const nx = startX + dir * (i + 1) * stepW;
+          const sy = startY + i * stepH;
+          const ny = startY + (i + 1) * stepH;
+          pts.push(new THREE.Vector3(nx, sy, 0.02));
+          pts.push(new THREE.Vector3(nx, ny, 0.02));
         }
+        const stairLine = addLineTo(scene, pts, strokeMat);
+        levelDecor.push(stairLine);
+        return stairLine;
       }
       function createSpike(x, y) {
         const group = new THREE.Group();
@@ -1437,11 +1476,24 @@ html, body {
         let best = null;
         let bestDelta = Infinity;
         for (const p of platforms) {
-          const onPlatform = x > p.x1 + 0.28 && x < p.x2 - 0.28;
+          const a = Math.min(p.x1, p.x2);
+          const b = Math.max(p.x1, p.x2);
+          const onPlatform = x >= a + 0.10 && x <= b - 0.10;
           if (!onPlatform) continue;
           const delta = Math.abs(p.y - referenceY);
-          if (delta < bestDelta && delta < 1.6) {
-            best = p;
+          if (delta < bestDelta && delta < 1.8) {
+            best = { x1: a, x2: b, y: p.y };
+            bestDelta = delta;
+          }
+        }
+        for (const stair of stairs) {
+          const minX = Math.min(stair.x1, stair.x2);
+          const maxX = Math.max(stair.x1, stair.x2);
+          if (x < minX + 0.10 || x > maxX - 0.10) continue;
+          const sy = stairYAt(stair, x);
+          const delta = Math.abs(sy - referenceY);
+          if (delta < bestDelta && delta < 1.8) {
+            best = { x1: minX, x2: maxX, y: sy, isStair: true };
             bestDelta = delta;
           }
         }
@@ -1453,6 +1505,368 @@ html, body {
         const e = { x, y: groundY, startX: x, startY: groundY, group, hp: 3, dead: false, frame: 0, attackCooldown: 0, attackTimer: 0, attackType: 'punch', hasHit: false, state: 'idle', battleCryTimeout: null, bubbleTimeout: null, pendingBubbleWord: null };
         enemies.push(e); drawEnemy(e); return e;
       }
+
+      function makePulseCircle(group, r = 0.32, mat = softStrokeMat) {
+        drawCircle(group, 0, 0, r, mat);
+        drawCircle(group, 0, 0, r * 0.62, mat);
+      }
+
+      function createFallingBoulder(triggerX, groundY, dropX, topY) {
+        const group = new THREE.Group();
+        group.position.set(0, 0, 0.06);
+        scene.add(group);
+
+        const crack = new THREE.Group();
+        crack.position.set(triggerX, groundY + 0.035, 0.04);
+        addLineTo(crack, [new THREE.Vector3(-0.42, 0, 0), new THREE.Vector3(-0.12, 0.08, 0), new THREE.Vector3(0.08, -0.04, 0), new THREE.Vector3(0.38, 0.05, 0)], strokeMat);
+        addLineTo(crack, [new THREE.Vector3(-0.04, 0.02, 0), new THREE.Vector3(-0.16, -0.16, 0)], strokeMat);
+        group.add(crack);
+
+        const shadow = new THREE.Group();
+        shadow.position.set(dropX, groundY + 0.04, 0.05);
+        makePulseCircle(shadow, 0.52, softStrokeMat);
+        shadow.visible = false;
+        group.add(shadow);
+
+        const rock = new THREE.Group();
+        rock.position.set(dropX, topY, 0.08);
+        drawCircle(rock, 0, 0, 0.46, strokeMat);
+        addLineTo(rock, [new THREE.Vector3(-0.26, 0.10, 0), new THREE.Vector3(-0.05, 0.26, 0), new THREE.Vector3(0.18, 0.12, 0)], strokeMat);
+        addLineTo(rock, [new THREE.Vector3(-0.18, -0.16, 0), new THREE.Vector3(0.10, -0.24, 0), new THREE.Vector3(0.28, -0.02, 0)], strokeMat);
+        rock.visible = false;
+        group.add(rock);
+
+        boulders.push({ group, crack, shadow, rock, triggerX, groundY, dropX, topY, y: topY, state: 'idle', timer: 0, hit: false });
+      }
+
+      function createSwingingAxe(anchorX, anchorY, length = 2.1, amplitude = 0.72, speed = 0.045) {
+        const group = new THREE.Group();
+        group.position.set(anchorX, anchorY, 0.07);
+        scene.add(group);
+
+        const arm = new THREE.Group();
+        addLineTo(arm, [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -length, 0)], strokeMat);
+        const bladeY = -length;
+        addLineTo(arm, [new THREE.Vector3(-0.38, bladeY + 0.08, 0), new THREE.Vector3(0, bladeY - 0.30, 0), new THREE.Vector3(0.38, bladeY + 0.08, 0)], strokeMat);
+        addLineTo(arm, [new THREE.Vector3(-0.28, bladeY + 0.24, 0), new THREE.Vector3(0.28, bladeY + 0.24, 0)], strokeMat);
+        group.add(arm);
+        drawCircle(group, 0, 0, 0.10, strokeMat);
+
+        const warn = new THREE.Group();
+        warn.position.set(0, -length, 0.02);
+        makePulseCircle(warn, 0.58, softStrokeMat);
+        group.add(warn);
+
+        swingingAxes.push({ group, arm, warn, anchorX, anchorY, length, amplitude, speed, phase: Math.random() * Math.PI * 2 });
+      }
+
+      function createSawBlade(minX, maxX, y, speed = 0.045) {
+        const group = new THREE.Group();
+        group.position.set(0, 0, 0.08);
+        scene.add(group);
+
+        const rail = new THREE.Group();
+        addLineTo(rail, [new THREE.Vector3(minX, y, 0), new THREE.Vector3(maxX, y, 0)], softStrokeMat);
+        group.add(rail);
+
+        const saw = new THREE.Group();
+        saw.position.set(minX, y, 0.08);
+        drawCircle(saw, 0, 0, 0.34, strokeMat);
+        for (let i = 0; i < 8; i++) {
+          const a = i / 8 * Math.PI * 2;
+          const a2 = a + Math.PI / 8;
+          addLineTo(saw, [
+            new THREE.Vector3(Math.cos(a) * 0.34, Math.sin(a) * 0.34, 0),
+            new THREE.Vector3(Math.cos(a2) * 0.52, Math.sin(a2) * 0.52, 0)
+          ], strokeMat);
+        }
+        group.add(saw);
+
+        const warn = new THREE.Group();
+        warn.position.set((minX + maxX) * 0.5, y, 0.03);
+        addLineTo(warn, [new THREE.Vector3(-0.34, 0.42, 0), new THREE.Vector3(0, 0.68, 0), new THREE.Vector3(0.34, 0.42, 0)], softStrokeMat);
+        group.add(warn);
+
+        sawBlades.push({ group, rail, saw, warn, minX, maxX, y, speed, t: 0, x: minX });
+      }
+
+      function createRollingSpikedLog(minX, maxX, y, speed = 0.045) {
+        const group = new THREE.Group();
+        group.position.set(0, 0, 0.09);
+        scene.add(group);
+        addLineTo(group, [new THREE.Vector3(minX, y + 0.48, 0), new THREE.Vector3(maxX, y + 0.48, 0)], softStrokeMat);
+        const log = new THREE.Group();
+        log.position.set(minX, y + 0.48, 0.08);
+        drawCircle(log, 0, 0, 0.42, strokeMat);
+        for (let i = 0; i < 10; i++) {
+          const a = i / 10 * Math.PI * 2;
+          addLineTo(log, [
+            new THREE.Vector3(Math.cos(a) * 0.28, Math.sin(a) * 0.28, 0),
+            new THREE.Vector3(Math.cos(a) * 0.66, Math.sin(a) * 0.66, 0)
+          ], strokeMat);
+        }
+        group.add(log);
+        const warn = new THREE.Group();
+        warn.position.set((minX + maxX) * 0.5, y + 0.48, 0.03);
+        makePulseCircle(warn, 0.68, softStrokeMat);
+        group.add(warn);
+        rollingLogs.push({ group, log, warn, minX, maxX, y: y + 0.48, speed, dir: 1, x: minX });
+      }
+
+      function createCrushingWallTrap(centerX, y, openGap = 2.7, blockW = 0.72, blockH = 2.25) {
+        const group = new THREE.Group();
+        group.position.set(0, 0, 0.08);
+        scene.add(group);
+        const railY = y + blockH * 0.5;
+        addLineTo(group, [new THREE.Vector3(centerX - openGap, railY, 0), new THREE.Vector3(centerX + openGap, railY, 0)], softStrokeMat);
+        const makeBlock = () => {
+          const b = new THREE.Group();
+          addLineTo(b, [
+            new THREE.Vector3(-blockW * 0.5, 0, 0), new THREE.Vector3(blockW * 0.5, 0, 0),
+            new THREE.Vector3(blockW * 0.5, blockH, 0), new THREE.Vector3(-blockW * 0.5, blockH, 0),
+            new THREE.Vector3(-blockW * 0.5, 0, 0)
+          ], strokeMat);
+          addLineTo(b, [new THREE.Vector3(-blockW * 0.35, 0.28, 0), new THREE.Vector3(blockW * 0.35, blockH - 0.28, 0)], softStrokeMat);
+          return b;
+        };
+        const left = makeBlock();
+        const right = makeBlock();
+        group.add(left); group.add(right);
+        const warn = new THREE.Group();
+        warn.position.set(centerX, y + blockH * 0.52, 0.04);
+        makePulseCircle(warn, 0.76, softStrokeMat);
+        group.add(warn);
+        crushingWalls.push({ group, left, right, warn, centerX, y, openGap, blockW, blockH, cycle: 0, closed: false });
+      }
+
+      function createWindGustEmitter(x1, x2, y, strength = 0.038) {
+        const group = new THREE.Group();
+        group.position.set(0, 0, 0.07);
+        scene.add(group);
+        const emitter = new THREE.Group();
+        emitter.position.set(x1, y + 0.45, 0);
+        addLineTo(emitter, [new THREE.Vector3(-0.25, -0.45, 0), new THREE.Vector3(0.25, -0.25, 0), new THREE.Vector3(0.25, 1.35, 0), new THREE.Vector3(-0.25, 1.55, 0), new THREE.Vector3(-0.25, -0.45, 0)], strokeMat);
+        group.add(emitter);
+        const waves = [];
+        for (let i = 0; i < 5; i++) {
+          const w = new THREE.Group();
+          const base = y + 0.55 + i * 0.24;
+          addLineTo(w, [
+            new THREE.Vector3(x1 + 0.6, base, 0),
+            new THREE.Vector3(x1 + 1.1, base + 0.16, 0),
+            new THREE.Vector3(x1 + 1.7, base - 0.12, 0),
+            new THREE.Vector3(x1 + 2.4, base + 0.12, 0)
+          ], softStrokeMat);
+          group.add(w);
+          waves.push(w);
+        }
+        const warn = new THREE.Group();
+        warn.position.set((x1 + x2) * 0.5, y + 1.1, 0.03);
+        addLineTo(warn, [new THREE.Vector3(-0.42, 0.40, 0), new THREE.Vector3(0, 0.70, 0), new THREE.Vector3(0.42, 0.40, 0)], softStrokeMat);
+        group.add(warn);
+        windEmitters.push({ group, waves, warn, x1, x2, y, strength, dir: 1, timer: 0 });
+      }
+
+      function createSpearTurret(x, y, dir = -1) {
+        const group = new THREE.Group();
+        group.position.set(x, y, 0.08);
+        scene.add(group);
+        const body = new THREE.Group();
+        drawCircle(body, 0, 0.55, 0.28, strokeMat);
+        addLineTo(body, [new THREE.Vector3(0, 0.30, 0), new THREE.Vector3(0, -0.35, 0)], strokeMat);
+        addLineTo(body, [new THREE.Vector3(0, 0.10, 0), new THREE.Vector3(0.55 * dir, 0.38, 0)], strokeMat);
+        group.add(body);
+        const charge = new THREE.Group();
+        charge.position.set(0.62 * dir, 0.38, 0.02);
+        makePulseCircle(charge, 0.38, softStrokeMat);
+        charge.visible = false;
+        group.add(charge);
+        spearTurrets.push({ group, body, charge, x, y, dir: dir >= 0 ? 1 : -1, timer: 0, charging: false, projectiles: [] });
+      }
+
+      function spawnSpearProjectile(turret) {
+        const spear = new THREE.Group();
+        const dir = turret.dir;
+        addLineTo(spear, [new THREE.Vector3(0, 0, 0), new THREE.Vector3(1.05 * dir, 0, 0)], strokeMat);
+        addLineTo(spear, [
+          new THREE.Vector3(1.05 * dir, 0, 0),
+          new THREE.Vector3(0.78 * dir, 0.16, 0),
+          new THREE.Vector3(0.78 * dir, -0.16, 0),
+          new THREE.Vector3(1.05 * dir, 0, 0)
+        ], strokeMat);
+        spear.position.set(turret.x + 0.72 * dir, turret.y + 0.38, 0.13);
+        scene.add(spear);
+        turret.projectiles.push({ group: spear, x: spear.position.x, y: spear.position.y, dir, life: 190, hit: false });
+        playSfx('enemyAttack');
+      }
+
+      function updateDynamicObstacles(frameScale) {
+        const px = playerGroup.position.x;
+        const py = playerGroup.position.y;
+
+        for (const b of boulders) {
+          if (b.state === 'idle' && Math.abs(px - b.triggerX) < 0.55 && Math.abs(py - b.groundY) < 0.65) {
+            b.state = 'warning';
+            b.timer = 48;
+            b.shadow.visible = true;
+            b.rock.visible = true;
+            b.rock.position.y = b.topY;
+            b.y = b.topY;
+            playSfx('enemyAttack');
+          }
+          if (b.state === 'warning') {
+            b.timer -= frameScale;
+            const pulse = 1 + Math.sin(animTime * 0.42) * 0.18;
+            b.shadow.scale.set(pulse, pulse, 1);
+            if (b.timer <= 0) b.state = 'drop';
+          } else if (b.state === 'drop') {
+            b.y -= 0.26 * frameScale;
+            b.rock.position.y = b.y;
+            if (!b.hit && Math.abs(px - b.dropX) < 0.62 && Math.abs((py + 0.75) - b.y) < 0.82) {
+              b.hit = true;
+              playerVelocity.x = px < b.dropX ? -0.18 : 0.18;
+              playerVelocity.y = 0.20;
+              applyDamage(1, 'CRUSHED!');
+            }
+            if (b.y <= b.groundY + 0.48) {
+              b.y = b.groundY + 0.48;
+              b.rock.position.y = b.y;
+              b.state = 'landed';
+              b.timer = 70;
+              cameraShake = Math.max(cameraShake, 0.08);
+              burst(b.dropX, b.groundY + 0.45, 8);
+            }
+          } else if (b.state === 'landed') {
+            b.timer -= frameScale;
+            if (b.timer <= 0) {
+              b.state = 'idle';
+              b.hit = false;
+              b.shadow.visible = false;
+              b.rock.visible = false;
+              b.rock.position.y = b.topY;
+            }
+          }
+        }
+
+        for (const a of swingingAxes) {
+          const angle = Math.sin(animTime * a.speed + a.phase) * a.amplitude;
+          a.arm.rotation.z = angle;
+          const bladeX = a.anchorX + Math.sin(angle) * a.length;
+          const bladeY = a.anchorY - Math.cos(angle) * a.length;
+          const pulse = 1 + Math.abs(Math.sin(animTime * 0.12 + a.phase)) * 0.16;
+          a.warn.scale.set(pulse, pulse, 1);
+          if (Math.abs(px - bladeX) < 0.62 && Math.abs((py + 0.75) - bladeY) < 0.62) {
+            playerVelocity.x = px < bladeX ? -0.14 : 0.14;
+            applyDamage(1, 'AXED!');
+          }
+        }
+
+        for (const s of sawBlades) {
+          s.t += s.speed * frameScale;
+          const u = (Math.sin(s.t) + 1) * 0.5;
+          s.x = s.minX + (s.maxX - s.minX) * u;
+          s.saw.position.x = s.x;
+          s.saw.position.y = s.y;
+          s.saw.rotation.z -= 0.22 * frameScale;
+          const pulse = 1 + Math.abs(Math.sin(animTime * 0.16)) * 0.10;
+          s.warn.scale.set(pulse, pulse, 1);
+          if (Math.abs(px - s.x) < 0.62 && Math.abs((py + 0.55) - s.y) < 0.62) {
+            playerVelocity.x = px < s.x ? -0.24 : 0.24;
+            playerVelocity.y = Math.max(playerVelocity.y, 0.14);
+            applyDamage(1, 'SAWED!');
+          }
+        }
+
+
+        for (const l of rollingLogs) {
+          l.x += l.speed * l.dir * frameScale;
+          if (l.x <= l.minX) { l.x = l.minX; l.dir = 1; }
+          if (l.x >= l.maxX) { l.x = l.maxX; l.dir = -1; }
+          l.log.position.x = l.x;
+          l.log.rotation.z -= 0.15 * l.dir * frameScale;
+          const pulse = 1 + Math.abs(Math.sin(animTime * 0.13)) * 0.10;
+          l.warn.scale.set(pulse, pulse, 1);
+          if (Math.abs(px - l.x) < 0.72 && Math.abs((py + 0.55) - l.y) < 0.72) {
+            playerVelocity.x = px < l.x ? -0.26 : 0.26;
+            playerVelocity.y = Math.max(playerVelocity.y, 0.16);
+            applyDamage(1, 'LOGGED!');
+          }
+        }
+
+        for (const c of crushingWalls) {
+          c.cycle = (c.cycle + frameScale) % 300;
+          const closing = c.cycle >= 210 && c.cycle < 240;
+          const closed = c.cycle >= 240;
+          const opening = c.cycle < 30;
+          let t = 0;
+          if (closing) t = (c.cycle - 210) / 30;
+          else if (closed) t = 1;
+          else if (opening) t = 1 - (c.cycle / 30);
+          const openOffset = c.openGap * 0.5;
+          const closedOffset = c.blockW * 0.55;
+          const offset = openOffset + (closedOffset - openOffset) * Math.max(0, Math.min(1, t));
+          c.left.position.set(c.centerX - offset, c.y, 0.08);
+          c.right.position.set(c.centerX + offset, c.y, 0.08);
+          c.warn.visible = c.cycle >= 170 || closed;
+          const pulse = 1 + Math.abs(Math.sin(animTime * 0.22)) * 0.20;
+          c.warn.scale.set(pulse, pulse, 1);
+          const bodyY = py + 0.75;
+          const withinY = bodyY > c.y - 0.15 && bodyY < c.y + c.blockH + 0.15;
+          const hitLeft = Math.abs(px - (c.centerX - offset)) < c.blockW * 0.72 && withinY;
+          const hitRight = Math.abs(px - (c.centerX + offset)) < c.blockW * 0.72 && withinY;
+          if ((hitLeft || hitRight) && t > 0.55) {
+            playerVelocity.x = px < c.centerX ? -0.22 : 0.22;
+            playerVelocity.y = Math.max(playerVelocity.y, 0.12);
+            applyDamage(1, 'CRUSHED!');
+          }
+        }
+
+        for (const w of windEmitters) {
+          w.timer += frameScale;
+          if (w.timer >= 180) { w.timer = 0; w.dir *= -1; }
+          const phase = animTime * 0.08 * w.dir;
+          w.waves.forEach((wave, idx) => {
+            const travel = ((phase + idx * 0.55) % 3.8 + 3.8) % 3.8;
+            wave.position.x = w.dir > 0 ? travel : -travel;
+            wave.position.y = Math.sin(animTime * 0.08 + idx) * 0.05;
+          });
+          w.warn.rotation.z = w.dir > 0 ? 0 : Math.PI;
+          w.warn.scale.set(1 + Math.abs(Math.sin(animTime * 0.11)) * 0.16, 1, 1);
+          if (px > w.x1 && px < w.x2 && py > w.y - 0.4 && py < w.y + 2.2) {
+            const blockFactor = keys.ArrowDown && onGround ? 0.28 : 1;
+            playerVelocity.x += w.strength * w.dir * blockFactor * frameScale;
+            if (Math.abs(playerVelocity.x) > 0.22) playerVelocity.x = 0.22 * Math.sign(playerVelocity.x);
+          }
+        }
+
+        for (const t of spearTurrets) {
+          t.timer = (t.timer + frameScale) % 240;
+          t.charging = t.timer >= 120;
+          t.charge.visible = t.charging;
+          if (t.charging) {
+            const pulse = 1 + Math.abs(Math.sin(animTime * 0.28)) * 0.35;
+            t.charge.scale.set(pulse, pulse, 1);
+          }
+          if (t.timer < frameScale + 0.1) spawnSpearProjectile(t);
+          for (let i = t.projectiles.length - 1; i >= 0; i--) {
+            const sp = t.projectiles[i];
+            sp.life -= frameScale;
+            sp.x += 0.095 * sp.dir * frameScale;
+            sp.group.position.x = sp.x;
+            if (!sp.hit && Math.abs(px - sp.x) < 0.72 && Math.abs((py + 0.72) - sp.y) < 0.46) {
+              sp.hit = true;
+              playerVelocity.x = sp.dir * 0.22;
+              playerVelocity.y = Math.max(playerVelocity.y, 0.12);
+              applyDamage(1, 'SPEARED!');
+            }
+            if (sp.life <= 0 || Math.abs(sp.x - t.x) > 18 || sp.hit) {
+              disposeObjectTree(sp.group);
+              t.projectiles.splice(i, 1);
+            }
+          }
+        }
+      }
+
       function drawEnemy(e) {
         if (lowPerfMode && e.frame % 2 !== 0 && e.state === 'idle') return;
         clearGroup(e.group);
@@ -1493,7 +1907,7 @@ html, body {
       }
 
       const LEVELS = [
-        {
+{
           name: 'Level 1',
           start: { x: -7, y: 0 },
           exit: { x: 11.5, y: 0.8 },
@@ -1506,7 +1920,7 @@ html, body {
             createDoor(-7, 0.8, false); createDoor(11.5, 0.8, true); createEnemy(2, 0);
           }
         },
-        {
+{
           name: 'Level 2',
           start: { x: -7, y: 0 },
           exit: { x: 23, y: 0.8 },
@@ -1526,7 +1940,7 @@ html, body {
             createPotion(0.9, 1.55);
 
             // Stair climb to first combat shelf.
-            createStaircase(3.2, 0, 9, 0.55, 0.22, 1);
+            createStaircase(1.2, 0, 14, 0.50, 0.1464285714, 1);
             createPlatform(8.2, 2.05, 12.8);
             createEnemy(9.0, 2.05);
             createPotion(10.2, 2.05);
@@ -1548,194 +1962,341 @@ html, body {
             createDoor(30.0, 0.8, true);
           }
         },
-        {
+{
           name: 'Level 3',
           start: { x: -7, y: 0 },
-          exit: { x: 63, y: 4.8 },
+          exit: { x: 59.2, y: 5.0 },
           build() {
-            // Level 3: about 80 world units, three tier-floors, 3 enemies, 2 gaps, 2 stair climbs.
-            createPlatform(-8, 0, 6);
-            createPlatform(9, 0, 25);
+            // Level 3: Three Shrine Ascent.
+            // Purpose: longer than Level 2 through three distinct tier-floor structures,
+            // not by extending one long line. Each structure contains a ground line,
+            // 1-tier, 2-tier, and 3-tier platform for jumping/exploration.
+
+            // Structure 1: Broken start climb. Pure jumping route.
+            createPlatform(-8, 0, -2.0);          // ground floor A1
+            createPlatform(0.0, 0, 8.0);          // ground floor A2 after first real gap
+            createPlatform(-1.0, 1.45, 3.2);      // 1-tier
+            createPlatform(3.9, 2.90, 6.9);       // 2-tier
+            createPlatform(7.5, 4.20, 11.0);      // 3-tier
             createDoor(-7, 0.8, false);
-            createPotion(2, 0);
-            createEnemy(12, 0);
-            createSpike(18, 0.05);
+            createPotion(1.4, 0);
+            createPotion(2.1, 1.45);
+            createPotion(5.3, 2.90);
+            createPotion(9.3, 4.20);
+            createEnemy(1.8, 1.45);
+            createSpike(6.6, 0.05);
 
-            createStaircase(25, 0, 8, 0.55, 0.25, 1);
-            createPlatform(29.4, 2, 42);
-            createPotion(35, 2);
-            createEnemy(37.5, 2);
-            createSpike(41.0, 2.05);
+            // Structure 2: Lower gallery into stair climb. Different rhythm from Structure 1.
+            createPlatform(13.0, 0, 26.0);        // ground floor
+            createPlatform(16.5, 1.40, 21.8);     // 1-tier
+            createPlatform(23.2, 2.80, 27.2);     // 2-tier
+            createPlatform(29.0, 4.20, 33.2);     // 3-tier
+            createPotion(15.0, 0);
+            createPotion(19.0, 1.40);
+            createPotion(25.5, 2.80);
+            createEnemy(18.8, 1.40);
+            createStaircase(26.0, 0, 12, 0.25, 0.35, 1); // connects exactly to x 29.0, y 4.20
 
-            createPlatform(46, 2, 54);
-            createEnemy(50, 2);
-            createStaircase(54, 2, 8, 0.55, 0.25, 1);
-            createPlatform(58.4, 4, 66);
-            createPotion(61, 4);
-            createDoor(63, 4.8, true);
+            // Structure 3: Final moon shelf. Second staircase and final combat shelf.
+            createPlatform(36.0, 0, 48.0);        // ground floor
+            createPlatform(39.4, 1.40, 44.2);     // 1-tier
+            createPlatform(46.8, 2.80, 52.0);     // 2-tier
+            createPlatform(54.0, 4.20, 61.2);     // 3-tier / exit shelf
+            createPotion(37.8, 0);
+            createPotion(42.0, 1.40);
+            createPotion(49.0, 2.80);
+            createPotion(58.0, 4.20);
+            createSpike(42.4, 1.45);
+            createStaircase(48.0, 0, 12, 0.50, 0.35, 1); // connects exactly to x 54.0, y 4.20
+            createEnemy(57.0, 4.20);
+            createDoor(59.2, 5.0, true);
           }
         },
         {
           name: 'Level 4',
           start: { x: -7, y: 0 },
-          exit: { x: 143, y: 6.8 },
+          exit: { x: 90.4, y: 5.55 },
           build() {
-            // Level 4: about 160 world units, four tier-floors, 4 enemies, 2 gaps, 2 stair climbs.
-            createPlatform(-8, 0, 18);
-            createPlatform(22, 0, 55);
+            // Level 4: Broken Quarry Gate. Four distinct tier/floor structures, four enemies, one falling boulder trap.
             createDoor(-7, 0.8, false);
-            createPotion(8, 0);
-            createEnemy(14, 0);
-            createSpike(35, 0.05);
 
-            createStaircase(55, 0, 10, 0.55, 0.20, 1);
-            createPlatform(60.5, 2, 92);
-            createPotion(70, 2);
-            createEnemy(78, 2);
-            createSpike(90, 2.05);
+            // Structure 1: cracked ground and first climb.
+            createPlatform(-8, 0, -3.4);
+            createPlatform(-1.0, 0, 7.0);
+            createPlatform(1.2, 1.35, 5.6);
+            createPlatform(6.8, 2.70, 11.0);
+            createPlatform(12.0, 4.05, 16.2);
+            createPotion(2.2, 1.35);
+            createPotion(8.8, 2.70);
+            createEnemy(4.4, 1.35);
+            createSpike(5.8, 0.05);
+            createFallingBoulder(1.0, 0, 3.0, 6.6);
 
-            createPlatform(96, 2, 110);
-            createEnemy(102, 2);
-            createStaircase(110, 2, 10, 0.55, 0.20, 1);
-            createPlatform(115.5, 4, 137);
-            createPotion(126, 4);
-            createEnemy(132, 4);
+            // Structure 2: basin to connected stair shelf.
+            createPlatform(18.0, 0, 27.0);
+            createPlatform(20.2, 1.35, 25.3);
+            createPlatform(29.8, 2.85, 35.0);
+            createPlatform(38.0, 4.35, 43.4);
+            createPotion(21.0, 1.35);
+            createPotion(33.4, 2.85);
+            createEnemy(31.8, 2.85);
+            createStaircase(27.0, 0, 12, 0.25, 0.2375, 1); // ends x 30.0, y 2.85
+            createStaircase(35.0, 2.85, 12, 0.25, 0.125, 1); // ends x 38.0, y 4.35
 
-            createPlatform(134, 6, 146);
-            createDoor(143, 6.8, true);
+            // Structure 3: mid-air shelves with exploration ring.
+            createPlatform(46.0, 0, 54.0);
+            createPlatform(48.0, 1.50, 53.6);
+            createPlatform(56.6, 3.00, 62.4);
+            createPlatform(64.8, 4.60, 70.2);
+            createPotion(51.2, 1.50);
+            createPotion(59.2, 3.00);
+            createEnemy(66.8, 4.60);
+            createSpike(60.2, 3.05);
+
+            // Structure 4: final tower switchback.
+            createPlatform(73.0, 0, 81.0);
+            createPlatform(76.0, 1.50, 83.0);
+            createPlatform(84.5, 3.05, 89.5);
+            createPlatform(90.0, 4.75, 94.5);
+            createPotion(78.2, 1.50);
+            createPotion(92.8, 4.75);
+            createEnemy(79.0, 1.50);
+            createEnemy(91.7, 4.75);
+            createStaircase(81.0, 0, 14, 0.25, 0.2178571429, 1); // ends x 84.5, y 3.05
+            createDoor(90.4, 5.55, true);
           }
         },
         {
           name: 'Level 5',
           start: { x: -7, y: 0 },
-          exit: { x: 303, y: 8.0 },
+          exit: { x: 119.8, y: 6.55 },
           build() {
-            // Level 5: about 320 world units, five tier-floors, 5 enemies, 2 gaps, 2 stair climbs.
-            createPlatform(-8, 0, 30);
-            createPlatform(34, 0, 90);
+            // Level 5: Pendulum Hall. Five structures, five enemies, one swinging axe pendulum.
             createDoor(-7, 0.8, false);
-            createPotion(18, 0);
-            createEnemy(42, 0);
-            createSpike(62, 0.05);
 
-            createStaircase(90, 0, 9, 0.60, 0.20, 1);
-            createPlatform(95.4, 1.8, 150);
-            createPotion(116, 1.8);
-            createEnemy(108, 1.8);
-            createEnemy(144, 1.8);
+            // Structure 1: split opener.
+            createPlatform(-8, 0, -3.2);
+            createPlatform(-0.8, 0, 6.6);
+            createPlatform(0.8, 1.35, 5.0);
+            createPlatform(7.2, 2.80, 12.0);
+            createPlatform(13.8, 4.15, 18.2);
+            createPotion(2.0, 1.35);
+            createPotion(10.2, 2.80);
+            createEnemy(4.1, 1.35);
+            createSpike(5.3, 0.05);
 
-            createPlatform(160, 3.6, 210);
-            createPotion(184, 3.6);
-            createSpike(204, 3.65);
-            createPlatform(214, 3.6, 245);
-            createEnemy(222, 3.6);
+            // Structure 2: pendulum bridge.
+            createPlatform(21.0, 0, 29.0);
+            createPlatform(23.0, 1.45, 28.4);
+            createPlatform(31.0, 3.00, 39.0);
+            createPlatform(41.5, 4.60, 47.0);
+            createPotion(24.0, 1.45);
+            createPotion(37.0, 3.00);
+            createEnemy(34.2, 3.00);
+            createSwingingAxe(35.0, 5.55, 2.05, 0.70, 0.046);
+            createStaircase(29.0, 0, 8, 0.25, 0.375, 1); // ends x 31.0, y 3.00
 
-            createStaircase(245, 3.6, 9, 0.60, 0.20, 1);
-            createPlatform(250.4, 5.4, 291);
-            createEnemy(268, 5.4);
-            createPotion(282, 5.4);
+            // Structure 3: staggered upper climb.
+            createPlatform(50.0, 0, 58.0);
+            createPlatform(52.4, 1.60, 57.8);
+            createPlatform(61.2, 3.15, 67.0);
+            createPlatform(70.0, 4.90, 76.2);
+            createPotion(54.0, 1.60);
+            createPotion(64.0, 3.15);
+            createEnemy(72.8, 4.90);
+            createSpike(63.2, 3.20);
 
-            createPlatform(287, 7.2, 306);
-            createDoor(303, 8.0, true);
+            // Structure 4: stair shaft.
+            createPlatform(79.0, 0, 87.0);
+            createPlatform(82.0, 1.55, 89.0);
+            createPlatform(91.0, 3.20, 98.0);
+            createPlatform(100.0, 5.05, 106.0);
+            createPotion(84.5, 1.55);
+            createPotion(94.0, 3.20);
+            createEnemy(93.5, 3.20);
+            createStaircase(87.0, 0, 16, 0.25, 0.20, 1); // ends x 91.0, y 3.20
+            createStaircase(98.0, 3.20, 8, 0.25, 0.23125, 1); // ends x 100.0, y 5.05
+
+            // Structure 5: final pendulum exit shelves.
+            createPlatform(109.0, 0, 116.0);
+            createPlatform(111.0, 1.75, 116.8);
+            createPlatform(119.0, 3.45, 124.8);
+            createPlatform(117.4, 5.75, 123.6);
+            createPotion(112.8, 1.75);
+            createPotion(121.0, 5.75);
+            createEnemy(113.8, 1.75);
+            createEnemy(120.2, 5.75);
+            createDoor(119.8, 6.55, true);
           }
         },
         {
           name: 'Level 6',
           start: { x: -7, y: 0 },
-          exit: { x: 623, y: 10.8 },
+          exit: { x: 151.8, y: 7.55 },
           build() {
-            // Level 6: about 640 world units, six tier-floors, 6 enemies, 2 gaps, 2 stair climbs.
-            createPlatform(-8, 0, 60);
-            createPlatform(64, 0, 140);
+            // Level 6: Sawline Ascent. Six structures, six enemies, one horizontal saw blade rail.
             createDoor(-7, 0.8, false);
-            createPotion(32, 0);
-            createEnemy(48, 0);
-            createEnemy(112, 0);
-            createSpike(126, 0.05);
 
-            createStaircase(140, 0, 10, 0.60, 0.20, 1);
-            createPlatform(146, 2, 250);
-            createPotion(180, 2);
-            createEnemy(204, 2);
-            createSpike(238, 2.05);
+            // Structure 1: narrow broken approach.
+            createPlatform(-8, 0, -3.5);
+            createPlatform(-0.8, 0, 7.0);
+            createPlatform(1.2, 1.45, 5.8);
+            createPlatform(8.0, 2.90, 13.0);
+            createPlatform(15.0, 4.35, 20.0);
+            createPotion(2.4, 1.45);
+            createPotion(10.6, 2.90);
+            createEnemy(4.2, 1.45);
+            createSpike(5.8, 0.05);
 
-            createPlatform(260, 4, 360);
-            createPotion(310, 4);
-            createEnemy(338, 4);
-            createPlatform(366, 4, 450);
-            createEnemy(420, 4);
+            // Structure 2: saw rail under the shelf.
+            createPlatform(23.0, 0, 31.0);
+            createPlatform(25.0, 1.60, 31.0);
+            createPlatform(33.0, 3.25, 41.0);
+            createPlatform(44.0, 4.95, 50.0);
+            createPotion(26.2, 1.60);
+            createPotion(38.4, 3.25);
+            createEnemy(36.0, 3.25);
+            createSawBlade(34.2, 39.8, 3.72, 0.052);
+            createStaircase(31.0, 0, 8, 0.25, 0.40625, 1); // ends x 33.0, y 3.25
 
-            createStaircase(450, 4, 10, 0.60, 0.20, 1);
-            createPlatform(456, 6, 540);
-            createPotion(500, 6);
-            createEnemy(525, 6);
+            // Structure 3: floating shelves.
+            createPlatform(53.0, 0, 61.0);
+            createPlatform(55.5, 1.70, 61.5);
+            createPlatform(64.0, 3.35, 70.2);
+            createPlatform(73.0, 5.10, 79.4);
+            createPotion(57.2, 1.70);
+            createPotion(67.0, 3.35);
+            createPotion(76.2, 5.10);
+            createEnemy(74.8, 5.10);
+            createSpike(66.2, 3.40);
 
-            createPlatform(548, 8, 608);
-            createPlatform(590, 10, 626);
-            createDoor(623, 10.8, true);
+            // Structure 4: double stair shelf.
+            createPlatform(82.0, 0, 90.0);
+            createPlatform(84.5, 1.75, 91.2);
+            createPlatform(94.0, 3.55, 101.0);
+            createPlatform(104.0, 5.45, 111.0);
+            createPotion(86.4, 1.75);
+            createPotion(98.0, 3.55);
+            createEnemy(97.0, 3.55);
+            createStaircase(90.0, 0, 16, 0.25, 0.221875, 1); // ends x 94.0, y 3.55
+            createStaircase(101.0, 3.55, 12, 0.25, 0.1583333333, 1); // ends x 104.0, y 5.45
+
+            // Structure 5: high broken gallery.
+            createPlatform(114.0, 0, 122.0);
+            createPlatform(116.5, 1.90, 123.0);
+            createPlatform(126.0, 3.75, 133.0);
+            createPlatform(136.0, 5.80, 143.0);
+            createPotion(118.8, 1.90);
+            createPotion(130.0, 3.75);
+            createEnemy(128.6, 3.75);
+            createEnemy(139.0, 5.80);
+            createSpike(121.0, 0.05);
+
+            // Structure 6: final crown shelf.
+            createPlatform(146.0, 0, 153.0);
+            createPlatform(148.0, 2.05, 155.2);
+            createPlatform(157.5, 4.05, 164.0);
+            createPlatform(149.0, 6.75, 156.2);
+            createPotion(150.0, 2.05);
+            createPotion(154.0, 6.75);
+            createEnemy(151.4, 6.75);
+            createDoor(151.8, 7.55, true);
           }
+
         },
         {
           name: 'Level 7',
           start: { x: -7, y: 0 },
-          exit: { x: 1263, y: 11.6 },
+          exit: { x: 180.8, y: 8.1 },
           build() {
-            // Level 7: about 1280 world units, seven tier-floors, 7 enemies, 2 gaps, 2 stair climbs.
-            createPlatform(-8, 0, 100);
-            createPlatform(106, 0, 260);
+            // Level 7: Rolling Log Causeway. Seven structures, seven enemies, one rolling spiked log.
             createDoor(-7, 0.8, false);
-            createPotion(50, 0);
-            createEnemy(82, 0);
-            createEnemy(180, 0);
-            createSpike(236, 0.05);
-
-            createStaircase(260, 0, 9, 0.60, 0.20, 1);
-            createPlatform(265.4, 1.8, 420);
-            createPotion(320, 1.8);
-            createEnemy(360, 1.8);
-
-            createPlatform(430, 3.6, 600);
-            createPotion(500, 3.6);
-            createEnemy(570, 3.6);
-            createSpike(590, 3.65);
-
-            createPlatform(606, 3.6, 740);
-            createEnemy(690, 3.6);
-            createStaircase(740, 3.6, 9, 0.60, 0.20, 1);
-            createPlatform(745.4, 5.4, 860);
-            createPotion(810, 5.4);
-
-            createPlatform(872, 7.2, 1000);
-            createEnemy(940, 7.2);
-            createPlatform(1012, 9, 1140);
-            createPotion(1080, 9);
-            createEnemy(1115, 9);
-            createPlatform(1150, 10.8, 1266);
-            createDoor(1263, 11.6, true);
+            createPlatform(-8, 0, -3.5); createPlatform(-0.8, 0, 7.0); createPlatform(1.2, 1.45, 5.8); createPlatform(8.0, 2.9, 13.0); createPlatform(15.0, 4.35, 20.0); createPotion(2.4, 1.45); createPotion(10.5, 2.9); createEnemy(4.0, 1.45); createSpike(5.8, 0.05);
+            createPlatform(23.0, 0, 31.0); createPlatform(25.0, 1.55, 30.5); createPlatform(33.0, 3.10, 40.0); createPlatform(43.0, 4.85, 49.0); createPotion(26.0, 1.55); createPotion(37.0, 3.10); createEnemy(35.4, 3.10); createRollingSpikedLog(34.4, 39.0, 3.10, 0.045); createStaircase(31.0, 0, 8, 0.25, 0.3875, 1);
+            createPlatform(52.0, 0, 60.0); createPlatform(54.5, 1.65, 60.8); createPlatform(63.0, 3.25, 69.2); createPlatform(72.5, 5.00, 79.0); createPotion(56.4, 1.65); createPotion(66.2, 3.25); createEnemy(74.0, 5.00); createSpike(65.2, 3.30);
+            createPlatform(82.0, 0, 90.0); createPlatform(84.8, 1.80, 91.0); createPlatform(94.0, 3.55, 101.0); createPlatform(104.0, 5.35, 111.0); createPotion(86.8, 1.80); createPotion(98.0, 3.55); createEnemy(96.8, 3.55); createStaircase(90.0, 0, 16, 0.25, 0.221875, 1); createStaircase(101.0, 3.55, 12, 0.25, 0.15, 1);
+            createPlatform(114.0, 0, 122.0); createPlatform(116.5, 1.90, 123.4); createPlatform(126.0, 3.85, 133.0); createPlatform(136.0, 5.85, 143.0); createPotion(118.8, 1.90); createPotion(130.0, 3.85); createEnemy(128.8, 3.85); createEnemy(139.4, 5.85); createSpike(121.0, 0.05);
+            createPlatform(146.0, 0, 154.0); createPlatform(148.4, 2.00, 155.0); createPlatform(158.0, 4.05, 165.0); createPlatform(168.0, 6.15, 175.0); createPotion(150.3, 2.00); createPotion(161.5, 4.05); createEnemy(160.0, 4.05); createStaircase(154.0, 0, 16, 0.25, 0.253125, 1);
+            createPlatform(178.0, 0, 185.0); createPlatform(180.0, 2.10, 187.0); createPlatform(189.5, 4.25, 196.0); createPlatform(179.0, 7.30, 185.8); createPotion(182.0, 2.10); createPotion(183.6, 7.30); createEnemy(182.2, 7.30); createDoor(180.8, 8.1, true);
+          }
+        },
+        {
+          name: 'Level 8',
+          start: { x: -7, y: 0 },
+          exit: { x: 213.0, y: 8.7 },
+          build() {
+            // Level 8: Crushing Wall Gallery. Eight structures, eight enemies, timed crushing gate.
+            createDoor(-7, 0.8, false);
+            createPlatform(-8, 0, -3.5); createPlatform(-0.8, 0, 7.0); createPlatform(1.0, 1.45, 5.8); createPlatform(8.0, 3.0, 13.4); createPlatform(16.0, 4.55, 21.0); createPotion(2.4, 1.45); createEnemy(4.0, 1.45); createSpike(5.8, 0.05);
+            createPlatform(24.0, 0, 32.0); createPlatform(26.4, 1.6, 32.2); createPlatform(35.0, 3.25, 42.0); createPlatform(45.0, 5.05, 51.0); createPotion(28.0, 1.6); createPotion(39.0, 3.25); createEnemy(37.0, 3.25); createCrushingWallTrap(38.4, 3.25, 3.1); createStaircase(32.0, 0, 12, 0.25, 0.2708333333, 1);
+            createPlatform(54.0, 0, 62.0); createPlatform(56.8, 1.75, 63.0); createPlatform(66.0, 3.45, 72.8); createPlatform(76.0, 5.25, 83.0); createPotion(58.8, 1.75); createPotion(69.2, 3.45); createEnemy(78.0, 5.25); createSpike(68.5, 3.50);
+            createPlatform(86.0, 0, 94.0); createPlatform(88.8, 1.9, 95.4); createPlatform(98.0, 3.75, 105.5); createPlatform(109.0, 5.60, 116.0); createPotion(91.0, 1.9); createPotion(102.0, 3.75); createEnemy(101.0, 3.75); createStaircase(94.0, 0, 16, 0.25, 0.234375, 1); createStaircase(105.5, 3.75, 14, 0.25, 0.1321428571, 1);
+            createPlatform(119.0, 0, 127.0); createPlatform(121.6, 2.0, 128.2); createPlatform(131.0, 4.0, 138.4); createPlatform(142.0, 5.95, 149.0); createPotion(123.8, 2.0); createPotion(134.4, 4.0); createEnemy(133.2, 4.0); createEnemy(144.0, 5.95);
+            createPlatform(152.0, 0, 160.0); createPlatform(154.5, 2.10, 161.5); createPlatform(164.0, 4.20, 171.0); createPlatform(174.0, 6.25, 181.0); createPotion(156.6, 2.10); createPotion(167.5, 4.20); createEnemy(166.0, 4.20); createStaircase(160.0, 0, 16, 0.25, 0.2625, 1);
+            createPlatform(184.0, 0, 192.0); createPlatform(186.5, 2.20, 193.5); createPlatform(196.5, 4.45, 203.0); createPlatform(206.0, 6.60, 213.0); createPotion(188.8, 2.20); createPotion(209.0, 6.60); createEnemy(199.0, 4.45); createEnemy(208.8, 6.60); createSpike(190.6, 0.05);
+            createPlatform(216.0, 0, 223.0); createPlatform(218.5, 2.35, 225.2); createPlatform(228.0, 4.70, 234.5); createPlatform(211.0, 7.90, 217.0); createPotion(220.6, 2.35); createPotion(214.0, 7.90); createEnemy(213.4, 7.90); createDoor(213.0, 8.7, true);
+          }
+        },
+        {
+          name: 'Level 9',
+          start: { x: -7, y: 0 },
+          exit: { x: 246.5, y: 9.2 },
+          build() {
+            // Level 9: Wind Spine. Nine structures, nine enemies, alternating wind emitter.
+            createDoor(-7, 0.8, false);
+            createPlatform(-8, 0, -3.5); createPlatform(-0.8, 0, 7.0); createPlatform(1.2, 1.5, 6.0); createPlatform(8.4, 3.05, 14.0); createPlatform(17.0, 4.70, 22.0); createPotion(2.6, 1.5); createEnemy(4.2, 1.5); createSpike(5.8, 0.05);
+            createPlatform(25.0, 0, 33.0); createPlatform(27.6, 1.65, 33.5); createPlatform(36.0, 3.35, 43.0); createPlatform(46.5, 5.15, 53.0); createPotion(29.8, 1.65); createPotion(39.5, 3.35); createEnemy(38.2, 3.35); createWindGustEmitter(36.0, 43.0, 3.35, 0.034); createStaircase(33.0, 0, 12, 0.25, 0.2791666667, 1);
+            createPlatform(56.0, 0, 64.0); createPlatform(58.8, 1.8, 65.4); createPlatform(68.0, 3.6, 75.0); createPlatform(79.0, 5.45, 86.0); createPotion(61.0, 1.8); createPotion(71.4, 3.6); createEnemy(81.2, 5.45); createSpike(70.5, 3.65);
+            createPlatform(89.0, 0, 97.0); createPlatform(91.8, 1.95, 98.8); createPlatform(101.5, 3.90, 109.0); createPlatform(113.0, 5.85, 120.0); createPotion(94.0, 1.95); createPotion(105.8, 3.90); createEnemy(104.0, 3.90); createStaircase(97.0, 0, 18, 0.25, 0.2166666667, 1);
+            createPlatform(123.0, 0, 131.0); createPlatform(125.8, 2.05, 133.0); createPlatform(136.0, 4.15, 143.0); createPlatform(147.0, 6.25, 154.0); createPotion(128.0, 2.05); createPotion(139.5, 4.15); createEnemy(138.2, 4.15); createEnemy(149.2, 6.25); createSpike(129.5, 0.05);
+            createPlatform(157.0, 0, 165.0); createPlatform(159.8, 2.20, 167.0); createPlatform(170.0, 4.40, 177.0); createPlatform(181.0, 6.60, 188.0); createPotion(162.0, 2.20); createPotion(173.5, 4.40); createEnemy(172.2, 4.40); createStaircase(165.0, 0, 20, 0.25, 0.22, 1);
+            createPlatform(191.0, 0, 199.0); createPlatform(193.5, 2.35, 201.0); createPlatform(204.0, 4.70, 211.0); createPlatform(215.0, 6.95, 222.0); createPotion(196.0, 2.35); createPotion(218.0, 6.95); createEnemy(206.4, 4.70); createEnemy(217.8, 6.95);
+            createPlatform(225.0, 0, 233.0); createPlatform(227.5, 2.50, 235.0); createPlatform(238.0, 5.00, 245.0); createPlatform(249.0, 7.35, 256.0); createPotion(230.0, 2.50); createPotion(252.0, 7.35); createEnemy(240.8, 5.00); createSpike(231.5, 0.05);
+            createPlatform(259.0, 0, 266.0); createPlatform(261.0, 2.65, 268.0); createPlatform(270.8, 5.30, 277.2); createPlatform(244.8, 8.40, 251.8); createPotion(263.0, 2.65); createPotion(248.0, 8.40); createEnemy(247.0, 8.40); createDoor(246.5, 9.2, true);
+          }
+        },
+        {
+          name: 'Level 10',
+          start: { x: -7, y: 0 },
+          exit: { x: 279.5, y: 9.8 },
+          build() {
+            // Level 10: Spear Moon Gate. Ten structures, ten enemies, charging spear turret.
+            createDoor(-7, 0.8, false);
+            createPlatform(-8, 0, -3.5); createPlatform(-0.8, 0, 7.0); createPlatform(1.2, 1.55, 6.0); createPlatform(8.5, 3.15, 14.5); createPlatform(17.5, 4.85, 23.0); createPotion(2.8, 1.55); createEnemy(4.4, 1.55); createSpike(5.8, 0.05);
+            createPlatform(26.0, 0, 34.0); createPlatform(28.8, 1.70, 35.0); createPlatform(38.0, 3.45, 45.0); createPlatform(49.0, 5.25, 56.0); createPotion(31.0, 1.70); createPotion(41.5, 3.45); createEnemy(40.0, 3.45); createSpearTurret(54.8, 5.25, -1); createStaircase(34.0, 0, 16, 0.25, 0.215625, 1);
+            createPlatform(59.0, 0, 67.0); createPlatform(61.8, 1.85, 68.4); createPlatform(71.0, 3.70, 78.0); createPlatform(82.0, 5.55, 89.0); createPotion(64.0, 1.85); createPotion(74.5, 3.70); createEnemy(84.0, 5.55); createSpike(73.0, 3.75);
+            createPlatform(92.0, 0, 100.0); createPlatform(94.8, 2.00, 102.0); createPlatform(105.0, 4.00, 112.5); createPlatform(116.5, 5.95, 124.0); createPotion(97.0, 2.00); createPotion(109.0, 4.00); createEnemy(108.0, 4.00); createStaircase(100.0, 0, 20, 0.25, 0.20, 1);
+            createPlatform(127.0, 0, 135.0); createPlatform(129.8, 2.15, 137.4); createPlatform(140.0, 4.30, 147.0); createPlatform(151.0, 6.35, 158.0); createPotion(132.0, 2.15); createPotion(143.5, 4.30); createEnemy(142.2, 4.30); createEnemy(153.2, 6.35); createSpike(133.5, 0.05);
+            createPlatform(161.0, 0, 169.0); createPlatform(163.8, 2.30, 171.0); createPlatform(174.0, 4.60, 181.0); createPlatform(185.0, 6.80, 192.0); createPotion(166.0, 2.30); createPotion(177.5, 4.60); createEnemy(176.2, 4.60); createStaircase(169.0, 0, 20, 0.25, 0.23, 1);
+            createPlatform(195.0, 0, 203.0); createPlatform(197.8, 2.45, 205.0); createPlatform(208.0, 4.90, 215.0); createPlatform(219.0, 7.15, 226.0); createPotion(200.0, 2.45); createPotion(222.0, 7.15); createEnemy(210.5, 4.90); createEnemy(221.8, 7.15);
+            createPlatform(229.0, 0, 237.0); createPlatform(231.8, 2.60, 239.0); createPlatform(242.0, 5.20, 249.0); createPlatform(253.0, 7.55, 260.0); createPotion(234.0, 2.60); createPotion(256.0, 7.55); createEnemy(244.5, 5.20); createSpike(235.5, 0.05);
+            createPlatform(263.0, 0, 271.0); createPlatform(265.6, 2.75, 273.0); createPlatform(276.0, 5.55, 283.0); createPlatform(287.0, 8.00, 294.0); createPotion(268.0, 2.75); createPotion(290.0, 8.00); createEnemy(278.5, 5.55); createStaircase(271.0, 0, 20, 0.25, 0.2775, 1);
+            createPlatform(297.0, 0, 305.0); createPlatform(299.5, 2.90, 307.0); createPlatform(310.0, 5.85, 317.0); createPlatform(277.5, 9.00, 284.5); createPotion(302.0, 2.90); createPotion(281.0, 9.00); createEnemy(280.0, 9.00); createDoor(279.5, 9.8, true);
           }
         }
+
       ];
 
-      function disposeSceneObject(obj) {
-        if (!obj) return;
-        if (obj.parent) obj.parent.remove(obj);
-        if (obj.geometry && obj.geometry.dispose) obj.geometry.dispose();
-        if (obj.material && obj.material.dispose && obj.material !== strokeMat && obj.material !== softStrokeMat) obj.material.dispose();
-        if (obj.children && obj.children.length) clearGroup(obj);
-      }
 
       function clearWorld() {
         clearPendingTimeouts();
-        platforms.forEach(p => disposeSceneObject(p.line));
-        levelDecor.forEach(line => disposeSceneObject(line));
-        spikes.forEach(s => disposeSceneObject(s.group));
-        potions.forEach(p => disposeSceneObject(p.group));
-        doors.forEach(d => disposeSceneObject(d.group));
+        platforms.forEach(p => disposeObjectTree(p.line));
+        levelDecor.forEach(line => disposeObjectTree(line));
+        spikes.forEach(s => disposeObjectTree(s.group));
+        potions.forEach(p => disposeObjectTree(p.group));
+        doors.forEach(d => disposeObjectTree(d.group));
         enemies.forEach(e => {
           if (e.battleCryTimeout) clearTimeout(e.battleCryTimeout);
           if (e.bubbleTimeout) clearTimeout(e.bubbleTimeout);
-          disposeSceneObject(e.group);
+          disposeObjectTree(e.group);
         });
+        boulders.forEach(o => disposeObjectTree(o.group));
+        swingingAxes.forEach(o => disposeObjectTree(o.group));
+        sawBlades.forEach(o => disposeObjectTree(o.group));
+        rollingLogs.forEach(o => disposeObjectTree(o.group));
+        crushingWalls.forEach(o => disposeObjectTree(o.group));
+        windEmitters.forEach(o => disposeObjectTree(o.group));
+        spearTurrets.forEach(o => { o.projectiles.forEach(p => disposeObjectTree(p.group)); disposeObjectTree(o.group); });
         platforms.length = 0;
         stairs.length = 0;
         levelDecor.length = 0;
@@ -1743,14 +2304,45 @@ html, body {
         potions.length = 0;
         doors.length = 0;
         enemies.length = 0;
+        boulders.length = 0;
+        swingingAxes.length = 0;
+        sawBlades.length = 0;
+        rollingLogs.length = 0;
+        crushingWalls.length = 0;
+        windEmitters.length = 0;
+        spearTurrets.length = 0;
+      }
+
+      function clearGameplayInputs() {
+        keys.ArrowLeft = false;
+        keys.ArrowRight = false;
+        keys.ArrowUp = false;
+        keys.ArrowDown = false;
+        keys[' '] = false;
+        document.querySelectorAll('.touchBtn.active').forEach(btn => btn.classList.remove('active'));
       }
 
       function showLevelBanner(text) {
         const el = $('levelBanner');
-        if (!el) return;
+        levelBannerActive = true;
+        clearGameplayInputs();
+        playerVelocity.x = 0;
+        playerVelocity.y = 0;
+        attackTimer = 0;
+        attackCooldown = 0;
+        attackSoundPlayed = false;
+        setPlayerState('idle', true);
+        if (!el) {
+          levelBannerActive = false;
+          return;
+        }
         el.textContent = text;
-        el.style.display = 'block';
-        delayed(() => { if (el) el.style.display = 'none'; }, 950);
+        el.style.display = 'flex';
+        delayed(() => {
+          if (el) el.style.display = 'none';
+          levelBannerActive = false;
+          clearGameplayInputs();
+        }, 950);
       }
 
       function buildLevel(levelIndex) {
@@ -1798,46 +2390,67 @@ html, body {
         showLevelBanner(level.name);
       }
 
-      function buildWorld() {
-        buildLevel(currentLevelIndex);
-      }
 
       function feetY() { return playerGroup.position.y; }
-      function snapPlayerToGround(x = START_X, groundY = START_Y) {
+      function snapPlayerToGround(x = -7, groundY = 0) {
         playerGroup.position.set(x, groundY, 0);
         playerVelocity.set(0, 0, 0);
         onGround = true;
       }
       function stairYAt(stair, x) {
-        const t = Math.max(0, Math.min(1, (x - stair.x1) / Math.max(0.001, stair.x2 - stair.x1)));
-        return stair.direction >= 0
-          ? stair.y1 + (stair.y2 - stair.y1) * t
-          : stair.y2 - (stair.y2 - stair.y1) * t;
+        // Interpolate along the actual authored stair direction.
+        // This works for every level and for both ascending-right and ascending-left stairs.
+        const startX = Number.isFinite(stair.startX) ? stair.startX : stair.x1;
+        const endX = Number.isFinite(stair.endX) ? stair.endX : stair.x2;
+        const startY = Number.isFinite(stair.startY) ? stair.startY : stair.y1;
+        const endY = Number.isFinite(stair.endY) ? stair.endY : stair.y2;
+        const denom = Math.abs(endX - startX) < 0.001 ? 1 : (endX - startX);
+        const t = Math.max(0, Math.min(1, (x - startX) / denom));
+        return startY + (endY - startY) * t;
       }
 
       function platformAt(x, y, prevY) {
         let best = null;
         let bestDelta = Infinity;
 
+        const platformEdgeTol = 0.28;
+        const platformTol = 0.40;
+        const stairEdgeTol = 0.46;
+        const stairTol = 1.05;
+
+        // Stairs are continuous hidden ramps under one visible pencil stair line.
+        // They are checked first so the player snaps to the stair instead of dropping
+        // between visual steps or before/after a stair endpoint.
         for (const stair of stairs) {
-          const inX = x > stair.x1 - 0.36 && x < stair.x2 + 0.36;
-          if (!inX) continue;
+          const minX = Math.min(stair.x1, stair.x2);
+          const maxX = Math.max(stair.x1, stair.x2);
+          if (x < minX - stairEdgeTol || x > maxX + stairEdgeTol) continue;
+
           const sy = stairYAt(stair, x);
-          const crossed = prevY >= sy - 0.04 && y <= sy + 0.14;
-          const close = Math.abs(y - sy) < 0.56;
-          if ((crossed || close) && Math.abs(y - sy) < bestDelta) {
-            best = { x1: stair.x1, x2: stair.x2, y: sy, isStair: true };
-            bestDelta = Math.abs(y - sy);
+          const delta = Math.abs(y - sy);
+          const wasNearStair = Math.abs(prevY - sy) <= stairTol;
+          const crossedDown = prevY >= sy - 0.18 && y <= sy + stairTol;
+          const groundedStep = onGround && delta <= stairTol;
+          const fallingOntoRamp = playerVelocity.y <= 0.32 && (crossedDown || wasNearStair || delta <= stairTol);
+
+          if ((groundedStep || fallingOntoRamp) && delta < bestDelta) {
+            best = { x1: minX, x2: maxX, y: sy, isStair: true, rigid: true, source: stair };
+            bestDelta = delta;
           }
         }
 
+        // Platform/tier/floor collision: each visible line is a rigid walkable segment.
+        // Gaps stay empty because collision is limited to explicit platform segments.
         for (const p of platforms) {
-          const inX = x > p.x1 - 0.32 && x < p.x2 + 0.32;
-          const crossed = prevY >= p.y - 0.02 && y <= p.y + 0.08;
-          const close = Math.abs(y - p.y) < 0.18;
+          const a = Math.min(p.x1, p.x2);
+          const b = Math.max(p.x1, p.x2);
+          if (x < a - platformEdgeTol || x > b + platformEdgeTol) continue;
+
           const delta = Math.abs(y - p.y);
-          if (inX && playerVelocity.y <= 0 && (crossed || close) && delta < bestDelta) {
-            best = p;
+          const crossed = prevY >= p.y - 0.14 && y <= p.y + platformTol;
+          const close = delta <= platformTol;
+          if (playerVelocity.y <= 0.32 && (crossed || close) && delta < bestDelta) {
+            best = { x1: a, x2: b, y: p.y, rigid: true, source: p };
             bestDelta = delta;
           }
         }
@@ -1861,6 +2474,17 @@ html, body {
       }
 
       function updatePlayer(frameScale) {
+        if (levelBannerActive) {
+          clearGameplayInputs();
+          playerVelocity.x = 0;
+          playerVelocity.y = 0;
+          attackTimer = 0;
+          attackCooldown = 0;
+          attackSoundPlayed = false;
+          damageCooldown = Math.max(0, damageCooldown - 1);
+          setPlayerState('idle');
+          return;
+        }
         const prevY = feetY();
         let move = 0;
         if (keys.ArrowLeft) { move = -1; facingDir = -1; }
@@ -1944,10 +2568,17 @@ html, body {
         if (attackTimer < ATTACK_STRIKE_END || attackTimer > ATTACK_STRIKE_START) return;
 
         const reachX = playerGroup.position.x + facingDir * 0.82;
+        const playerFeetY = feetY();
+        const playerHeadY = playerFeetY + (1.62 * CHAR_SCALE);
+        const upwardAttackLimitY = playerHeadY + 1.8;
         let didHit = false;
 
         for (const e of enemies) {
-          if (!e.dead && e.state !== 'death' && Math.abs(reachX - e.x) < 1.05 && Math.abs(feetY() - e.y) < 1.1) {
+          const horizontalReach = Math.abs(reachX - e.x) < 1.05;
+          const sameLevelReach = Math.abs(playerFeetY - e.y) < 1.1;
+          const upwardReach = e.y > playerFeetY && e.y <= upwardAttackLimitY;
+
+          if (!e.dead && e.state !== 'death' && horizontalReach && (sameLevelReach || upwardReach)) {
             didHit = true;
             attackSoundPlayed = true;
 
@@ -2007,7 +2638,7 @@ html, body {
                     const side = facingDir >= 0 ? 1 : -1;
                     const tailSide = side >= 0 ? 'left' : 'right';
                     const bubbleX = playerGroup.position.x + side * 1.25;
-                    const bubbleY = playerGroup.position.y + 2.05;
+                    const bubbleY = playerGroup.position.y + 3.05;
                     spawnSpeechBubble(bubbleWord, bubbleX, bubbleY, tailSide);
                   }
                 }, 500);
@@ -2089,7 +2720,7 @@ html, body {
         }
       }
 
-      function updateWorldDetails() {
+      function updateWorldDetails(frameScale = 1) {
         potions.forEach((p, i) => { if (!p.collected) p.group.position.y = p.baseY + Math.sin(animTime * 0.06 + (p.phase || i)) * 0.08; });
       }
       function updateCamera() {
@@ -2116,7 +2747,7 @@ html, body {
           fpsTime = 0;
           if (currentFPS < 30 && !lowPerfMode) {
             lowPerfMode = true;
-            renderer.setPixelRatio(1);
+            renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
           } else if (currentFPS >= 50 && lowPerfMode) {
             lowPerfMode = false;
             renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
@@ -2166,13 +2797,26 @@ html, body {
           startGame();
           return;
         }
+        if (e.key === 'r' || e.key === 'R') {
+          restartGame();
+          return;
+        }
+        if (levelBannerActive && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === ' ')) {
+          e.preventDefault();
+          clearGameplayInputs();
+          return;
+        }
         keys[e.key] = true;
-        if (e.key === 'r' || e.key === 'R') restartGame();
         if (e.key === ' ') e.preventDefault();
       });
       safeOn(window, 'keyup', e => { keys[e.key] = false; });
 
       function setTouchKey(key, val, btn) {
+        if (levelBannerActive && val) {
+          keys[key] = false;
+          if (btn) btn.classList.remove('active');
+          return;
+        }
         keys[key] = val;
         if (btn) btn.classList.toggle('active', val);
       }
@@ -2202,8 +2846,17 @@ html, body {
         camera.aspect = innerWidth / innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(innerWidth, innerHeight);
-        if (!orbit.dragging && !orbit.pinching) {
+
+        const nextProfile = getCameraProfile();
+        const profileChanged = nextProfile.name !== currentCameraProfileName;
+        currentCameraProfileName = nextProfile.name;
+
+        if (profileChanged && !orbit.dragging && !orbit.pinching) {
+          orbit.distance = nextProfile.defaultDistance;
+          orbit.pinchStartCameraDistance = nextProfile.defaultDistance;
+        } else if (!orbit.dragging && !orbit.pinching) {
           orbit.distance = clampCameraDistance(orbit.distance);
+          orbit.pinchStartCameraDistance = orbit.distance;
         }
       }
       safeOn(window, 'resize', onResize);
@@ -2221,16 +2874,16 @@ html, body {
 
         if (!introActive && !gameOver) {
           updatePlayer(frameScale);
-          checkSpikes(); checkPotions(); checkDoors(); checkEnemyHit(); updateEnemies();
+          checkSpikes(); updateDynamicObstacles(frameScale); checkPotions(); checkDoors(); checkEnemyHit(); updateEnemies();
         } else {
           enemies.forEach(e => { if (!e.dead) drawEnemy(e); });
         }
-        updateWorldDetails(); updateFX(); updateCamera(); drawStickman(); renderer.render(scene, camera);
+        updateWorldDetails(frameScale); updateFX(); updateCamera(); drawStickman(); renderer.render(scene, camera);
       }
 
       function initializeGame() {
         currentLevelIndex = 0;
-        buildWorld();
+        buildLevel(currentLevelIndex);
         const level = LEVELS[currentLevelIndex];
         snapPlayerToGround(level.start.x, level.start.y);
         updateUI();
