@@ -517,8 +517,8 @@ html, body {
   <div id="intro">
     <div id="introCard">
       <h1 id="introTitle"><span class="smallTitle">In a</span><span class="bigTitle">Stickman's World</span></h1>
-      <div id="introSubtitle">Retro stickman world - palace escape</div>
-      <div id="introText">At the zenith of a broken prophecy, a line-born stickman promises the moon to redraw destiny.</div>
+      <div id="introSubtitle">Retro stickman world</div>
+      <div id="introText">At the zenith of a broken prophecy, a line-born stickman promises the moon to reshape destiny.</div>
       <div id="introPrompt"><span>Run. Leap. Block. Strike.</span><button id="startButton">START QUEST</button></div>
     </div>
   </div>
@@ -558,7 +558,26 @@ html, body {
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
-    (function() {
+    (function bootstrapStickGame() {
+      'use strict';
+
+      if (!window.THREE) {
+        const msg = document.getElementById('msg');
+        const msgText = document.getElementById('msgText');
+        if (msg && msgText) {
+          msgText.innerText = 'LOAD ERROR';
+          msg.style.display = 'block';
+        }
+        console.error('Three.js failed to load. Game initialization stopped safely.');
+        return;
+      }
+
+      const $ = (id) => document.getElementById(id);
+      const safeOn = (el, type, handler, options) => {
+        if (!el || !el.addEventListener) return;
+        el.addEventListener(type, handler, options);
+      };
+
       const scene = new THREE.Scene();
       scene.background = new THREE.Color(0xffffff);
       const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 80);
@@ -725,22 +744,42 @@ html, body {
         document.fonts.load('40px "StickBubble"').catch(() => {});
       }
 
-      const audio = { ctx: null, master: null, muted: false, unlocked: false, noiseBuffer: null };
+      const audio = {
+        ctx: null,
+        master: null,
+        muted: false,
+        unlocked: false,
+        noiseBuffer: null,
+        resumePromise: null,
+        musicStarted: false
+      };
       const pendingTimeouts = [];
       let musicVolume = 0.16;
 
+      const AUDIO_PATHS = Object.freeze({
+        music: './music/Prince%20of%20Persia%20low%20res.mp3',
+        attackAir: './sfx/whoosh%20in%20air%20(1).mp3',
+        attackHit: './sfx/whoosh%20last%20hit.mp3',
+        attackKill: './sfx/whoosh%20last%20hit.mp3'
+      });
+
+      function createAudioAsset(src, volume = 1, loop = false) {
+        const a = new Audio(src);
+        a.preload = 'auto';
+        a.volume = volume;
+        a.loop = loop;
+        a.addEventListener('error', () => {
+          console.warn('Audio asset failed to load:', src);
+        }, { once: true });
+        return a;
+      }
+
       const assetAudio = {
-        music: new Audio('./music/Prince%20of%20Persia%20low%20res.mp3'),
-        attackAir: new Audio('./sfx/whoosh%20in%20air%20(1).mp3'),
-        attackHit: new Audio('./sfx/whoosh%20last%20hit.mp3'),
-        attackKill: new Audio('./sfx/whoosh%20last%20hit.mp3')
+        music: createAudioAsset(AUDIO_PATHS.music, musicVolume, true),
+        attackAir: createAudioAsset(AUDIO_PATHS.attackAir, 0.78),
+        attackHit: createAudioAsset(AUDIO_PATHS.attackHit, 0.9),
+        attackKill: createAudioAsset(AUDIO_PATHS.attackKill, 0.95)
       };
-      assetAudio.music.loop = true;
-      assetAudio.music.volume = musicVolume;
-      assetAudio.attackAir.volume = 0.78;
-      assetAudio.attackHit.volume = 0.9;
-      assetAudio.attackKill.volume = 0.95;
-      Object.values(assetAudio).forEach(a => { a.preload = 'auto'; });
 
       function playAssetSound(name) {
         if (audio.muted) return;
@@ -750,21 +789,36 @@ html, body {
           const sound = src.cloneNode(true);
           sound.volume = src.volume;
           sound.play().catch(() => {});
-        } catch (e) {}
+        } catch (e) {
+          console.warn('Audio playback failed:', name, e);
+        }
       }
 
       function startMusic() {
-        if (audio.muted) return;
+        if (audio.muted || !assetAudio.music) return;
         try {
-          assetAudio.music.currentTime = 0;
-          assetAudio.music.play().catch(() => {});
+          if (assetAudio.music.paused) {
+            if (!audio.musicStarted) {
+              assetAudio.music.currentTime = 0;
+              audio.musicStarted = true;
+            }
+            assetAudio.music.play().catch(() => {});
+          }
+        } catch (e) {
+          console.warn('Music playback failed:', e);
+        }
+      }
+
+      function pauseMusic() {
+        try {
+          assetAudio.music.pause();
         } catch (e) {}
       }
 
       function unlockAudio() {
-        if (audio.muted) return;
+        if (audio.muted) return false;
         const AudioContext = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContext) return;
+        if (!AudioContext) return false;
         if (!audio.ctx) {
           audio.ctx = new AudioContext();
           audio.master = audio.ctx.createGain();
@@ -775,16 +829,19 @@ html, body {
           const data = audio.noiseBuffer.getChannelData(0);
           for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1);
         }
-        if (audio.ctx.state === 'suspended') {
-          audio.ctx.resume().catch(() => {});
+        if (audio.ctx.state === 'suspended' && !audio.resumePromise) {
+          audio.resumePromise = audio.ctx.resume()
+            .catch(() => {})
+            .finally(() => { audio.resumePromise = null; });
         }
         audio.unlocked = true;
+        return true;
       }
 
       function ensureAudioRunning() {
         if (audio.muted || !audio.ctx) return false;
         if (audio.ctx.state === 'suspended') {
-          audio.ctx.resume().catch(() => {});
+          unlockAudio();
           return false;
         }
         return audio.ctx.state === 'running';
@@ -1071,64 +1128,54 @@ html, body {
         const ctx = c.getContext('2d');
         const cx = 450;
         const cy = 145;
-        const rx = 368;
-        const ry = 116;
+        const rx = 348;
+        const ry = 112;
 
         ctx.clearRect(0, 0, c.width, c.height);
         ctx.fillStyle = '#ffffff';
         ctx.strokeStyle = '#000000';
-        ctx.lineWidth = 8;
+        ctx.lineWidth = 5;
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
 
-        // Hand-drawn bubbly cloud outline: rounded lobes instead of a rectangle.
+        // Clean regular speech bubble: oval body + simple pointed tail.
         ctx.beginPath();
-        ctx.moveTo(cx - rx * 0.72, cy - ry * 0.88);
-        ctx.bezierCurveTo(cx - rx * 0.95, cy - ry * 0.98, cx - rx * 1.02, cy - ry * 0.42, cx - rx * 0.94, cy - ry * 0.12);
-        ctx.bezierCurveTo(cx - rx * 1.12, cy + ry * 0.10, cx - rx * 0.92, cy + ry * 0.76, cx - rx * 0.64, cy + ry * 0.72);
-        ctx.bezierCurveTo(cx - rx * 0.52, cy + ry * 1.02, cx - rx * 0.08, cy + ry * 0.98, cx + rx * 0.02, cy + ry * 0.76);
+        ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
 
+        // Tail points toward the player. Keep stroke thin and simple.
+        ctx.beginPath();
         if (tailSide === 'right') {
-          ctx.bezierCurveTo(cx + rx * 0.28, cy + ry * 0.98, cx + rx * 0.54, cy + ry * 0.82, cx + rx * 0.64, cy + ry * 0.64);
-          ctx.lineTo(cx + rx * 0.46, cy + ry * 1.24);
-          ctx.quadraticCurveTo(cx + rx * 0.42, cy + ry * 1.34, cx + rx * 0.52, cy + ry * 1.24);
-          ctx.lineTo(cx + rx * 0.72, cy + ry * 0.66);
+          ctx.moveTo(cx + rx * 0.36, cy + ry * 0.82);
+          ctx.lineTo(cx + rx * 0.12, cy + ry * 1.48);
+          ctx.lineTo(cx + rx * 0.58, cy + ry * 0.70);
         } else {
-          ctx.bezierCurveTo(cx + rx * 0.30, cy + ry * 0.96, cx + rx * 0.64, cy + ry * 0.78, cx + rx * 0.74, cy + ry * 0.48);
-          ctx.bezierCurveTo(cx + rx * 1.02, cy + ry * 0.56, cx + rx * 1.06, cy - ry * 0.02, cx + rx * 0.90, cy - ry * 0.18);
-        }
-
-        ctx.bezierCurveTo(cx + rx * 1.08, cy - ry * 0.46, cx + rx * 0.80, cy - ry * 1.06, cx + rx * 0.58, cy - ry * 0.86);
-        ctx.bezierCurveTo(cx + rx * 0.42, cy - ry * 1.16, cx + rx * 0.04, cy - ry * 1.08, cx - rx * 0.02, cy - ry * 0.86);
-        ctx.bezierCurveTo(cx - rx * 0.22, cy - ry * 1.12, cx - rx * 0.58, cy - ry * 1.08, cx - rx * 0.72, cy - ry * 0.88);
-
-        if (tailSide === 'right') {
-          // Close right-tail bubble cleanly after returning around the top.
-        } else {
-          ctx.lineTo(cx - rx * 0.58, cy + ry * 0.62);
-          ctx.lineTo(cx - rx * 0.46, cy + ry * 1.24);
-          ctx.quadraticCurveTo(cx - rx * 0.42, cy + ry * 1.34, cx - rx * 0.52, cy + ry * 1.24);
-          ctx.lineTo(cx - rx * 0.74, cy + ry * 0.56);
+          ctx.moveTo(cx - rx * 0.36, cy + ry * 0.82);
+          ctx.lineTo(cx - rx * 0.12, cy + ry * 1.48);
+          ctx.lineTo(cx - rx * 0.58, cy + ry * 0.70);
         }
         ctx.closePath();
         ctx.fill();
         ctx.stroke();
 
-        // Small imperfect highlight line to sell the hand-drawn bubble style.
+        // Repaint a small overlap so the tail feels attached to the oval.
         ctx.save();
-        ctx.globalAlpha = 0.22;
-        ctx.lineWidth = 5;
+        ctx.fillStyle = '#ffffff';
         ctx.beginPath();
-        ctx.moveTo(cx - rx * 0.42, cy - ry * 0.50);
-        ctx.quadraticCurveTo(cx - rx * 0.08, cy - ry * 0.74, cx + rx * 0.30, cy - ry * 0.54);
-        ctx.stroke();
+        if (tailSide === 'right') {
+          ctx.ellipse(cx + rx * 0.40, cy + ry * 0.73, 62, 24, -0.2, 0, Math.PI * 2);
+        } else {
+          ctx.ellipse(cx - rx * 0.40, cy + ry * 0.73, 62, 24, 0.2, 0, Math.PI * 2);
+        }
+        ctx.fill();
         ctx.restore();
 
         ctx.fillStyle = '#000000';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.font = '76px "StickBubble", "Comic Sans MS", cursive';
-        wrapBubbleText(ctx, text, cx, cy + 6, 650, 82);
+        wrapBubbleText(ctx, text, cx, cy + 4, 650, 82);
 
         const tex = new THREE.CanvasTexture(c);
         tex.needsUpdate = true;
@@ -1658,8 +1705,10 @@ html, body {
       }
 
       function updateUI() {
-        document.getElementById('hpDisplay').innerText = `HP: ${Math.max(0, hp)}/${maxHp}`;
-        document.getElementById('walletDisplay').innerText = `Wallet: ${wallet} AED`;
+        const hpEl = $('hpDisplay');
+        const walletEl = $('walletDisplay');
+        if (hpEl) hpEl.innerText = `HP: ${Math.max(0, hp)}/${maxHp}`;
+        if (walletEl) walletEl.innerText = `Wallet: ${wallet} AED`;
       }
       function endGame(msg) {
         if (gameOver) return;
@@ -1689,33 +1738,57 @@ html, body {
       function buyHealth() { if (wallet >= 10 && hp < maxHp && !gameOver) { playSfx('buy'); wallet -= 10; hp++; burst(playerGroup.position.x, playerGroup.position.y + 1.08, 7); spawnText('+HP', playerGroup.position.x, playerGroup.position.y + 1.38); updateUI(); } }
       function startGame() { unlockAudio(); playSfx('start'); startMusic(); restartGame(); }
 
-      window.addEventListener('keydown', e => { unlockAudio(); if (introActive && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); startGame(); return; } keys[e.key] = true; if (e.key === 'r' || e.key === 'R') restartGame(); if (e.key === ' ') e.preventDefault(); });
-      window.addEventListener('keyup', e => { keys[e.key] = false; });
-      function setTouchKey(key, val, btn) { keys[key] = val; if (btn) btn.classList.toggle('active', val); }
+      safeOn(window, 'keydown', e => {
+        unlockAudio();
+        if (introActive && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          startGame();
+          return;
+        }
+        keys[e.key] = true;
+        if (e.key === 'r' || e.key === 'R') restartGame();
+        if (e.key === ' ') e.preventDefault();
+      });
+      safeOn(window, 'keyup', e => { keys[e.key] = false; });
+
+      function setTouchKey(key, val, btn) {
+        keys[key] = val;
+        if (btn) btn.classList.toggle('active', val);
+      }
+
       document.querySelectorAll('.touchBtn[data-key]').forEach(btn => {
         const key = btn.dataset.key;
         const press = e => { e.preventDefault(); unlockAudio(); setTouchKey(key, true, btn); };
         const release = e => { e.preventDefault(); setTouchKey(key, false, btn); };
-        btn.addEventListener('pointerdown', press); btn.addEventListener('pointerup', release); btn.addEventListener('pointercancel', release); btn.addEventListener('pointerleave', release);
+        safeOn(btn, 'pointerdown', press);
+        safeOn(btn, 'pointerup', release);
+        safeOn(btn, 'pointercancel', release);
+        safeOn(btn, 'pointerleave', release);
       });
-      document.getElementById('startButton').addEventListener('click', startGame);
-      document.getElementById('soundButton').addEventListener('click', toggleSound);
-      document.getElementById('musicVolumeSlider').addEventListener('input', e => setMusicVolume(e.target.value));
-      setMusicVolume(document.getElementById('musicVolumeSlider').value);
-      document.getElementById('restartButton').addEventListener('click', () => { unlockAudio(); playSfx('start'); restartGame(); });
-      document.getElementById('restartTouch').addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); playSfx('start'); restartGame(); });
-      document.getElementById('buyButton').addEventListener('click', buyHealth);
+
+      safeOn($('startButton'), 'click', startGame);
+      safeOn($('soundButton'), 'click', toggleSound);
+
+      const musicSlider = $('musicVolumeSlider');
+      safeOn(musicSlider, 'input', e => setMusicVolume(e.target.value));
+      if (musicSlider) setMusicVolume(musicSlider.value);
+
+      safeOn($('restartButton'), 'click', () => { unlockAudio(); playSfx('start'); restartGame(); });
+      safeOn($('restartTouch'), 'pointerdown', e => { e.preventDefault(); unlockAudio(); playSfx('start'); restartGame(); });
+      safeOn($('buyButton'), 'click', buyHealth);
 
       function onResize() {
         camera.aspect = innerWidth / innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(innerWidth, innerHeight);
       }
-      window.addEventListener('resize', onResize);
-      window.addEventListener('orientationchange', () => setTimeout(onResize, 50));
+      safeOn(window, 'resize', onResize);
+      safeOn(window, 'orientationchange', () => setTimeout(onResize, 50));
+
+      let animationFrameId = 0;
 
       function animate() {
-        requestAnimationFrame(animate);
+        animationFrameId = requestAnimationFrame(animate);
         const dt = Math.min(clock.getDelta(), 0.05);
         const frameScale = dt / 0.0166667;
         animTime += 1; stateFrame++;
@@ -1731,13 +1804,36 @@ html, body {
         updateWorldDetails(); updateFX(); updateCamera(); drawStickman(); renderer.render(scene, camera);
       }
 
-      buildWorld();
-      snapPlayerToGround(START_X, START_Y);
-      updateUI();
-      orbit.yaw = 0; orbit.height = 1.35; orbit.distance = 14; orbit.dragging = false; orbit.pinching = false; orbit.pointerId = null; orbit.pointers.clear(); camera.position.set(START_X + 2, 4.8, 14); camera.lookAt(START_X, 0.8, 0);
-      enemies.forEach(drawEnemy);
-      drawStickman();
-      animate();
+      function initializeGame() {
+        buildWorld();
+        snapPlayerToGround(START_X, START_Y);
+        updateUI();
+        orbit.yaw = 0;
+        orbit.height = 1.35;
+        orbit.distance = 14;
+        orbit.dragging = false;
+        orbit.pinching = false;
+        orbit.pointerId = null;
+        orbit.pointers.clear();
+        camera.position.set(START_X + 2, 4.8, 14);
+        camera.lookAt(START_X, 0.8, 0);
+        enemies.forEach(drawEnemy);
+        drawStickman();
+        animate();
+      }
+
+      try {
+        initializeGame();
+      } catch (err) {
+        console.error('Game initialization failed:', err);
+        cancelAnimationFrame(animationFrameId);
+        const msg = $('msg');
+        const msgText = $('msgText');
+        if (msg && msgText) {
+          msgText.innerText = 'INIT ERROR';
+          msg.style.display = 'block';
+        }
+      }
     })();
   </script>
 </body>
