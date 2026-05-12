@@ -791,7 +791,7 @@ html, body {
 
       const fxGroup = new THREE.Group();
       scene.add(fxGroup);
-      const platforms = [], spikes = [], potions = [], enemies = [], doors = [], fx = [];
+      const platforms = [], stairs = [], spikes = [], potions = [], enemies = [], doors = [], fx = [], levelDecor = [];
       const enemyBubbleWords = [
         "Who's YouR DAddY",
         "Soft People!",
@@ -1385,6 +1385,35 @@ html, body {
         const line = addLineTo(scene, [new THREE.Vector3(x1, y, 0), new THREE.Vector3(x2, y, 0)], strokeMat);
         platforms.push({ x1, x2, y, line });
       }
+
+      function createDecorLine(x1, y1, x2, y2) {
+        const line = addLineTo(scene, [new THREE.Vector3(x1, y1, 0), new THREE.Vector3(x2, y2, 0)], strokeMat);
+        levelDecor.push(line);
+        return line;
+      }
+
+      function createStaircase(x, y, steps, stepW, stepH, direction = 1) {
+        const rawEndX = x + direction * steps * stepW;
+        const minX = Math.min(x, rawEndX);
+        const maxX = Math.max(x, rawEndX);
+        const startY = y;
+        const endY = y + steps * stepH;
+
+        // Visual stair lines remain individual steps, but a single hidden ramp collider
+        // is added so the player walks up/down stairs without falling between step edges.
+        stairs.push({ x1: minX, x2: maxX, y1: startY, y2: endY, direction, stepW, stepH, steps });
+
+        for (let i = 0; i < steps; i++) {
+          const x1 = x + direction * i * stepW;
+          const x2 = x + direction * (i + 1) * stepW;
+          const sx1 = Math.min(x1, x2);
+          const sx2 = Math.max(x1, x2);
+          const sy = y + (i + 1) * stepH;
+          createPlatform(sx1, sy, sx2);
+          const riserX = direction > 0 ? sx1 : sx2;
+          createDecorLine(riserX, sy - stepH, riserX, sy);
+        }
+      }
       function createSpike(x, y) {
         const group = new THREE.Group();
         group.position.set(x, y, 0);
@@ -1482,34 +1511,207 @@ html, body {
           start: { x: -7, y: 0 },
           exit: { x: 23, y: 0.8 },
           build() {
-            // Level 2: easy-to-medium, about 40 world units wide, longer route, 2 enemies, 2 gaps, 2 spikes.
-            // Lower route has two main death gaps: -1..2 and 8..11.
-            createPlatform(-8, 0, -1);
-            createPlatform(2, 0, 8);
-            createPlatform(11, 0, 16);
-            createPlatform(19, 0, 32);
+            // Level 2: reference-image layout.
+            // Long side-scrolling structure with a low start, two stair climbs, shelf combat, two spike pits, floating circle pickups, and a final exit door.
 
-            // Higher shelf route and floating transition platforms.
-            createPlatform(-4, 1.8, 0);
-            createPlatform(4, 2.6, 9);
-            createPlatform(12, 3.4, 17);
-            createPlatform(18, 2.2, 25);
-
-            // Two spike obstacles.
-            createSpike(6.2, 0.05);
-            createSpike(14.2, 3.45);
-
-            // Potions placed on climb/shelf path.
-            createPotion(-2.6, 1.8);
-            createPotion(13.8, 3.4);
-            createPotion(21.5, 2.2);
-
+            // Left start door and broken low floor.
+            createPlatform(-8, 0, -5.0);
+            createPlatform(-4.0, -0.45, -2.0);
+            createPlatform(-1.1, 0, 1.2);
             createDoor(-7, 0.8, false);
-            createDoor(23, 0.8, true);
 
-            // Two enemies.
-            createEnemy(5.2, 0);
-            createEnemy(20.5, 0);
+            // First floating pickup shelf.
+            createPlatform(-0.6, 1.55, 3.2);
+            createPotion(-2.7, 0);
+            createPotion(0.9, 1.55);
+
+            // Stair climb to first combat shelf.
+            createStaircase(3.2, 0, 9, 0.55, 0.22, 1);
+            createPlatform(8.2, 2.05, 12.8);
+            createEnemy(9.0, 2.05);
+            createPotion(10.2, 2.05);
+            createEnemy(11.4, 2.05);
+
+            // First spike pit and middle shelf.
+            createSpike(13.0, 0.05);
+            createPlatform(15.4, 2.05, 18.0);
+            createPotion(17.1, 2.05);
+
+            // Second staircase to high shelf.
+            createStaircase(18.0, 2.05, 11, 0.48, 0.24, 1);
+            createPlatform(23.3, 4.70, 26.2);
+            createPotion(25.0, 4.70);
+
+            // Final drop, second spike pit, and exit door platform.
+            createSpike(26.4, 0.05);
+            createPlatform(28.3, 0, 32.0);
+            createDoor(30.0, 0.8, true);
+          }
+        },
+        {
+          name: 'Level 3',
+          start: { x: -7, y: 0 },
+          exit: { x: 63, y: 4.8 },
+          build() {
+            // Level 3: about 80 world units, three tier-floors, 3 enemies, 2 gaps, 2 stair climbs.
+            createPlatform(-8, 0, 6);
+            createPlatform(9, 0, 25);
+            createDoor(-7, 0.8, false);
+            createPotion(2, 0);
+            createEnemy(12, 0);
+            createSpike(18, 0.05);
+
+            createStaircase(25, 0, 8, 0.55, 0.25, 1);
+            createPlatform(29.4, 2, 42);
+            createPotion(35, 2);
+            createEnemy(37.5, 2);
+            createSpike(41.0, 2.05);
+
+            createPlatform(46, 2, 54);
+            createEnemy(50, 2);
+            createStaircase(54, 2, 8, 0.55, 0.25, 1);
+            createPlatform(58.4, 4, 66);
+            createPotion(61, 4);
+            createDoor(63, 4.8, true);
+          }
+        },
+        {
+          name: 'Level 4',
+          start: { x: -7, y: 0 },
+          exit: { x: 143, y: 6.8 },
+          build() {
+            // Level 4: about 160 world units, four tier-floors, 4 enemies, 2 gaps, 2 stair climbs.
+            createPlatform(-8, 0, 18);
+            createPlatform(22, 0, 55);
+            createDoor(-7, 0.8, false);
+            createPotion(8, 0);
+            createEnemy(14, 0);
+            createSpike(35, 0.05);
+
+            createStaircase(55, 0, 10, 0.55, 0.20, 1);
+            createPlatform(60.5, 2, 92);
+            createPotion(70, 2);
+            createEnemy(78, 2);
+            createSpike(90, 2.05);
+
+            createPlatform(96, 2, 110);
+            createEnemy(102, 2);
+            createStaircase(110, 2, 10, 0.55, 0.20, 1);
+            createPlatform(115.5, 4, 137);
+            createPotion(126, 4);
+            createEnemy(132, 4);
+
+            createPlatform(134, 6, 146);
+            createDoor(143, 6.8, true);
+          }
+        },
+        {
+          name: 'Level 5',
+          start: { x: -7, y: 0 },
+          exit: { x: 303, y: 8.0 },
+          build() {
+            // Level 5: about 320 world units, five tier-floors, 5 enemies, 2 gaps, 2 stair climbs.
+            createPlatform(-8, 0, 30);
+            createPlatform(34, 0, 90);
+            createDoor(-7, 0.8, false);
+            createPotion(18, 0);
+            createEnemy(42, 0);
+            createSpike(62, 0.05);
+
+            createStaircase(90, 0, 9, 0.60, 0.20, 1);
+            createPlatform(95.4, 1.8, 150);
+            createPotion(116, 1.8);
+            createEnemy(108, 1.8);
+            createEnemy(144, 1.8);
+
+            createPlatform(160, 3.6, 210);
+            createPotion(184, 3.6);
+            createSpike(204, 3.65);
+            createPlatform(214, 3.6, 245);
+            createEnemy(222, 3.6);
+
+            createStaircase(245, 3.6, 9, 0.60, 0.20, 1);
+            createPlatform(250.4, 5.4, 291);
+            createEnemy(268, 5.4);
+            createPotion(282, 5.4);
+
+            createPlatform(287, 7.2, 306);
+            createDoor(303, 8.0, true);
+          }
+        },
+        {
+          name: 'Level 6',
+          start: { x: -7, y: 0 },
+          exit: { x: 623, y: 10.8 },
+          build() {
+            // Level 6: about 640 world units, six tier-floors, 6 enemies, 2 gaps, 2 stair climbs.
+            createPlatform(-8, 0, 60);
+            createPlatform(64, 0, 140);
+            createDoor(-7, 0.8, false);
+            createPotion(32, 0);
+            createEnemy(48, 0);
+            createEnemy(112, 0);
+            createSpike(126, 0.05);
+
+            createStaircase(140, 0, 10, 0.60, 0.20, 1);
+            createPlatform(146, 2, 250);
+            createPotion(180, 2);
+            createEnemy(204, 2);
+            createSpike(238, 2.05);
+
+            createPlatform(260, 4, 360);
+            createPotion(310, 4);
+            createEnemy(338, 4);
+            createPlatform(366, 4, 450);
+            createEnemy(420, 4);
+
+            createStaircase(450, 4, 10, 0.60, 0.20, 1);
+            createPlatform(456, 6, 540);
+            createPotion(500, 6);
+            createEnemy(525, 6);
+
+            createPlatform(548, 8, 608);
+            createPlatform(590, 10, 626);
+            createDoor(623, 10.8, true);
+          }
+        },
+        {
+          name: 'Level 7',
+          start: { x: -7, y: 0 },
+          exit: { x: 1263, y: 11.6 },
+          build() {
+            // Level 7: about 1280 world units, seven tier-floors, 7 enemies, 2 gaps, 2 stair climbs.
+            createPlatform(-8, 0, 100);
+            createPlatform(106, 0, 260);
+            createDoor(-7, 0.8, false);
+            createPotion(50, 0);
+            createEnemy(82, 0);
+            createEnemy(180, 0);
+            createSpike(236, 0.05);
+
+            createStaircase(260, 0, 9, 0.60, 0.20, 1);
+            createPlatform(265.4, 1.8, 420);
+            createPotion(320, 1.8);
+            createEnemy(360, 1.8);
+
+            createPlatform(430, 3.6, 600);
+            createPotion(500, 3.6);
+            createEnemy(570, 3.6);
+            createSpike(590, 3.65);
+
+            createPlatform(606, 3.6, 740);
+            createEnemy(690, 3.6);
+            createStaircase(740, 3.6, 9, 0.60, 0.20, 1);
+            createPlatform(745.4, 5.4, 860);
+            createPotion(810, 5.4);
+
+            createPlatform(872, 7.2, 1000);
+            createEnemy(940, 7.2);
+            createPlatform(1012, 9, 1140);
+            createPotion(1080, 9);
+            createEnemy(1115, 9);
+            createPlatform(1150, 10.8, 1266);
+            createDoor(1263, 11.6, true);
           }
         }
       ];
@@ -1525,6 +1727,7 @@ html, body {
       function clearWorld() {
         clearPendingTimeouts();
         platforms.forEach(p => disposeSceneObject(p.line));
+        levelDecor.forEach(line => disposeSceneObject(line));
         spikes.forEach(s => disposeSceneObject(s.group));
         potions.forEach(p => disposeSceneObject(p.group));
         doors.forEach(d => disposeSceneObject(d.group));
@@ -1534,6 +1737,8 @@ html, body {
           disposeSceneObject(e.group);
         });
         platforms.length = 0;
+        stairs.length = 0;
+        levelDecor.length = 0;
         spikes.length = 0;
         potions.length = 0;
         doors.length = 0;
@@ -1603,14 +1808,40 @@ html, body {
         playerVelocity.set(0, 0, 0);
         onGround = true;
       }
+      function stairYAt(stair, x) {
+        const t = Math.max(0, Math.min(1, (x - stair.x1) / Math.max(0.001, stair.x2 - stair.x1)));
+        return stair.direction >= 0
+          ? stair.y1 + (stair.y2 - stair.y1) * t
+          : stair.y2 - (stair.y2 - stair.y1) * t;
+      }
+
       function platformAt(x, y, prevY) {
+        let best = null;
+        let bestDelta = Infinity;
+
+        for (const stair of stairs) {
+          const inX = x > stair.x1 - 0.36 && x < stair.x2 + 0.36;
+          if (!inX) continue;
+          const sy = stairYAt(stair, x);
+          const crossed = prevY >= sy - 0.04 && y <= sy + 0.14;
+          const close = Math.abs(y - sy) < 0.56;
+          if ((crossed || close) && Math.abs(y - sy) < bestDelta) {
+            best = { x1: stair.x1, x2: stair.x2, y: sy, isStair: true };
+            bestDelta = Math.abs(y - sy);
+          }
+        }
+
         for (const p of platforms) {
           const inX = x > p.x1 - 0.32 && x < p.x2 + 0.32;
           const crossed = prevY >= p.y - 0.02 && y <= p.y + 0.08;
           const close = Math.abs(y - p.y) < 0.18;
-          if (inX && playerVelocity.y <= 0 && (crossed || close)) return p;
+          const delta = Math.abs(y - p.y);
+          if (inX && playerVelocity.y <= 0 && (crossed || close) && delta < bestDelta) {
+            best = p;
+            bestDelta = delta;
+          }
         }
-        return null;
+        return best;
       }
       function resolveGround(prevY) {
         const wasGrounded = onGround;
@@ -1650,7 +1881,7 @@ html, body {
         playerGroup.position.x += playerVelocity.x * frameScale;
         playerGroup.position.y += playerVelocity.y * frameScale;
         resolveGround(prevY);
-        if (feetY() < -6) endGame('FELL TO DEATH');
+        if (feetY() < -6) { restartCurrentLevelAfterFall(); return; }
         if (damageCooldown > 0) setPlayerState('hit');
         else if (attackTimer > 0) setPlayerState('attack');
         else if (!onGround && playerVelocity.y > 0) setPlayerState('jump');
@@ -1907,6 +2138,13 @@ html, body {
         playSfx(msg === 'VICTORY!' ? 'victory' : 'death');
         document.getElementById('msgText').innerText = msg;
         document.getElementById('msg').style.display = 'block';
+      }
+      function restartCurrentLevelAfterFall() {
+        if (gameOver) return;
+        playSfx('death');
+        if ($('msg')) $('msg').style.display = 'none';
+        document.body.classList.remove('modalOpen');
+        loadCurrentLevel(false);
       }
       function restartGame() {
         document.body.classList.remove('modalOpen');
