@@ -538,6 +538,44 @@ html, body {
         padding: 22px 18px;
       }
     }
+
+    #cheatLevelPanel {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1000;
+      display: none;
+      width: min(86vw, 520px);
+      max-height: min(78vh, 620px);
+      overflow: auto;
+      background: #fff;
+      border: 2px solid #000;
+      box-shadow: 8px 8px 0 #000;
+      padding: 14px;
+      box-sizing: border-box;
+      font-family: monospace;
+      color: #000;
+    }
+    #cheatLevelPanel h3 {
+      margin: 0 0 10px;
+      font-size: 16px;
+      text-transform: uppercase;
+    }
+    #cheatLevelGrid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+      gap: 8px;
+    }
+    #cheatLevelPanel button {
+      min-width: 0;
+      padding: 8px 9px;
+      font-size: 12px;
+    }
+    #cheatCloseButton {
+      width: 100%;
+      margin-top: 10px;
+    }
   </style>
 </head>
 <body>
@@ -584,6 +622,13 @@ html, body {
     </div>
   </div>
 
+
+  <div id="cheatLevelPanel" aria-hidden="true">
+    <h3>Level Select</h3>
+    <div id="cheatLevelGrid"></div>
+    <button id="cheatCloseButton" type="button">Close</button>
+  </div>
+
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script>
     (function () {
@@ -610,7 +655,6 @@ html, body {
       scene.background = new THREE.Color(0xffffff);
       const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.5, 80);
       const renderer = new THREE.WebGLRenderer({ antialias: true });
-      // Fixed renderer pixel ratio keeps WebGL line strokes visually consistent across levels.
       renderer.setPixelRatio(Math.min(devicePixelRatio || 1, 2));
       renderer.setSize(innerWidth, innerHeight);
       document.body.appendChild(renderer.domElement);
@@ -638,7 +682,6 @@ html, body {
       let footstepSide = 0;
       let lastFootstepFrame = -999;
       const maxHp = 5;
-      // Visual scale: keeps all stick characters proportionally shorter than door height.
       const CHAR_SCALE = 0.72;
       const DESKTOP_CAMERA_DISTANCE = 11.2;
       const DEFAULT_CAMERA_DISTANCE = 14;
@@ -822,7 +865,7 @@ html, body {
       const fxGroup = new THREE.Group();
       scene.add(fxGroup);
       const platforms = [], stairs = [], spikes = [], potions = [], enemies = [], doors = [], fx = [], levelDecor = [];
-      const boulders = [], swingingAxes = [], sawBlades = [], rollingLogs = [], crushingWalls = [], windEmitters = [], spearTurrets = [];
+      const advancedObstacles = [];
       const enemyBubbleWords = [
         "Who's YouR DAddY",
         "Soft People!",
@@ -986,53 +1029,44 @@ html, body {
 
         switch (name) {
           case 'start':
-            // Premium retro title confirm: soft riser + clean chime stack
             st(0, 146, 0.08, 'triangle', 0.13, 60);
             st(55, 220, 0.08, 'triangle', 0.12, 80);
             st(110, 330, 0.12, 'sine', 0.11, 110);
             sn(0, 0.18, 0.035, 2800, 'highpass');
             break;
           case 'jump':
-            // Louder jump SFX balanced against the MP3 combat sounds
             st(0, 190, 0.11, 'triangle', 0.42, 320);
             st(24, 360, 0.09, 'sine', 0.26, 240);
             st(58, 520, 0.06, 'triangle', 0.16, 180);
             sn(0, 0.09, 0.12, 1900, 'highpass');
             break;
           case 'land':
-            // Short grounded thump and dust
             st(0, 78, 0.10, 'sine', 0.18, -18);
             st(8, 118, 0.055, 'triangle', 0.06, -25);
             sn(0, 0.10, 0.075, 260, 'lowpass');
             break;
           case 'step':
-            // Fallback quiet foot tap.
             st(0, 68, 0.022, 'sine', 0.030, -4);
             sn(0, 0.026, 0.015, 300, 'lowpass');
             break;
           case 'footstepLeft':
-            // Subtle cloth + floor foley, slightly lower left step.
             st(0, 62, 0.024, 'sine', 0.026, -3);
             sn(0, 0.024, 0.014, 260, 'lowpass');
             sn(18, 0.020, 0.008, 900, 'bandpass');
             break;
           case 'footstepRight':
-            // Subtle cloth + floor foley, slightly lighter right step.
             st(0, 74, 0.020, 'sine', 0.022, -4);
             sn(0, 0.022, 0.012, 330, 'lowpass');
             sn(18, 0.018, 0.007, 1050, 'bandpass');
             break;
           case 'attack':
-            // Attack audio is timed inside checkEnemyHit() so air hits and enemy hits do not double-play.
             break;
           case 'enemyAttack':
-            // Heavier guard wind-up cue
             st(0, 210, 0.06, 'square', 0.08, -60);
             sn(0, 0.11, 0.075, 850, 'bandpass');
             st(45, 150, 0.05, 'triangle', 0.055, -25);
             break;
           case 'impact':
-            // Layered body hit: low thud + crack + grit
             st(0, 72, 0.12, 'sine', 0.060, -18);
             st(5, 118, 0.07, 'square', 0.032, -45);
             sn(0, 0.11, 0.032, 520, 'bandpass');
@@ -1044,27 +1078,23 @@ html, body {
             sn(8, 0.035, 0.008, 2200, 'highpass');
             break;
           case 'block':
-            // Metallic parry: layered ring, short noise splash
             st(0, 1180, 0.12, 'triangle', 0.13, -360);
             st(8, 760, 0.10, 'square', 0.08, -220);
             st(55, 1660, 0.08, 'sine', 0.045, -240);
             sn(0, 0.10, 0.055, 3200, 'highpass');
             break;
           case 'coin':
-            // Clean arcade reward chime
             st(0, 880, 0.055, 'triangle', 0.11, 120);
             st(55, 1320, 0.06, 'sine', 0.095, 160);
             st(115, 1760, 0.08, 'sine', 0.07, 180);
             break;
           case 'potion':
-            // Soft magic pickup
             st(0, 420, 0.08, 'sine', 0.10, 160);
             st(70, 640, 0.09, 'sine', 0.095, 190);
             st(135, 960, 0.11, 'triangle', 0.07, 120);
             sn(0, 0.13, 0.025, 2100, 'highpass');
             break;
           case 'collectWin':
-            // Louder winning pickup sound balanced against the MP3 combat sounds
             st(0, 523, 0.07, 'triangle', 0.38, 90);
             st(65, 659, 0.07, 'triangle', 0.34, 100);
             st(130, 784, 0.09, 'sine', 0.30, 130);
@@ -1077,14 +1107,12 @@ html, body {
             st(115, 1040, 0.07, 'sine', 0.06, 120);
             break;
           case 'death':
-            // Dramatic low drop
             st(0, 220, 0.15, 'sawtooth', 0.15, -95);
             st(95, 140, 0.22, 'sine', 0.14, -55);
             st(230, 84, 0.25, 'triangle', 0.10, -25);
             sn(0, 0.26, 0.07, 180, 'lowpass');
             break;
           case 'victory':
-            // Small heroic fanfare
             st(0, 392, 0.08, 'triangle', 0.12, 50);
             st(75, 523, 0.08, 'triangle', 0.12, 65);
             st(150, 659, 0.08, 'triangle', 0.11, 70);
@@ -1092,31 +1120,26 @@ html, body {
             sn(0, 0.20, 0.03, 2600, 'highpass');
             break;
           case 'playerOoh':
-            // Human-like descending vowel, sequenced instead of chorded
             st(0, 285, 0.11, 'sine', 0.064, -95);
             st(62, 175, 0.15, 'sine', 0.051, -48);
             sn(10, 0.07, 0.009, 430, 'lowpass');
             break;
           case 'playerAah':
-            // Sharper hurt vocalization
             st(0, 355, 0.08, 'sine', 0.067, -125);
             st(42, 215, 0.14, 'triangle', 0.048, -80);
             sn(0, 0.10, 0.014, 520, 'bandpass');
             break;
           case 'enemyOoh':
-            // Squeakier enemy pain
             st(0, 420, 0.09, 'sine', 0.056, -140);
             st(52, 270, 0.12, 'sine', 0.044, -70);
             sn(8, 0.055, 0.010, 650, 'lowpass');
             break;
           case 'enemyAah':
-            // Comedic death cry with falling saw layer
             st(0, 560, 0.065, 'sine', 0.064, -190);
             st(38, 310, 0.18, 'sawtooth', 0.041, -135);
             sn(0, 0.12, 0.019, 760, 'bandpass');
             break;
           case 'grunt':
-            // Short exertion, kept low and dry
             st(0, 175, 0.055, 'square', 0.115, -45);
             sn(0, 0.04, 0.04, 310, 'lowpass');
             break;
@@ -1211,10 +1234,6 @@ html, body {
       }
 
       function addSingleLine(group, pts, mat = strokeMat) {
-        // Use thin mesh strokes instead of WebGL native lines.
-        // Native THREE.Line/LineBasicMaterial renders inconsistently across browsers,
-        // DPI settings, camera tilt, and adjacent stair segments. This keeps every
-        // floor, tier, stair, character limb, ring, spike, and door stroke visually uniform.
         const strokeGroup = new THREE.Group();
         const style = getStrokeStyle(mat);
         let segments = 0;
@@ -1225,7 +1244,6 @@ html, body {
           addStrokeCap(strokeGroup, pts[0], style);
           addStrokeCap(strokeGroup, pts[pts.length - 1], style);
         }
-        // Dispose the un-cloned style material holder. Segment/cap meshes own clones.
         if (style.material && style.material.dispose) style.material.dispose();
         group.add(strokeGroup);
         return strokeGroup;
@@ -1290,7 +1308,6 @@ html, body {
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
 
-        // Oval-only speech bubble. No tail or rectangular body.
         ctx.beginPath();
         ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
         ctx.fill();
@@ -1463,8 +1480,6 @@ html, body {
       }
 
       function createPlatform(x1, y, x2) {
-        // One visible pencil line, one rigid hidden collider.
-        // Do not draw any duplicate strokes or thickness rectangles.
         const a = Math.min(x1, x2);
         const b = Math.max(x1, x2);
         if (Math.abs(b - a) < 0.08) return null;
@@ -1484,9 +1499,6 @@ html, body {
         const minX = Math.min(startX, endX);
         const maxX = Math.max(startX, endX);
 
-        // One hidden continuous ramp collider per staircase.
-        // The visible stair remains one pencil polyline. The collision stays rigid
-        // across the whole stair span, so no level can have fall-through stair gaps.
         stairs.push({
           x1: minX,
           x2: maxX,
@@ -1503,7 +1515,6 @@ html, body {
           rigid: true
         });
 
-        // Visible stair drawing: one continuous pencil polyline only.
         const pts = [new THREE.Vector3(startX, startY, 0.02)];
         for (let i = 0; i < cleanSteps; i++) {
           const nx = startX + dir * (i + 1) * stepW;
@@ -1573,361 +1584,376 @@ html, body {
         drawCircle(group, 0, 0, r, mat);
         drawCircle(group, 0, 0, r * 0.62, mat);
       }
-
-      function createFallingBoulder(triggerX, groundY, dropX, topY) {
-        const group = new THREE.Group();
-        group.position.set(0, 0, 0.06);
-        scene.add(group);
-
-        const crack = new THREE.Group();
-        crack.position.set(triggerX, groundY + 0.035, 0.04);
-        addLineTo(crack, [new THREE.Vector3(-0.42, 0, 0), new THREE.Vector3(-0.12, 0.08, 0), new THREE.Vector3(0.08, -0.04, 0), new THREE.Vector3(0.38, 0.05, 0)], strokeMat);
-        addLineTo(crack, [new THREE.Vector3(-0.04, 0.02, 0), new THREE.Vector3(-0.16, -0.16, 0)], strokeMat);
-        group.add(crack);
-
-        const shadow = new THREE.Group();
-        shadow.position.set(dropX, groundY + 0.04, 0.05);
-        makePulseCircle(shadow, 0.52, softStrokeMat);
-        shadow.visible = false;
-        group.add(shadow);
-
-        const rock = new THREE.Group();
-        rock.position.set(dropX, topY, 0.08);
-        drawCircle(rock, 0, 0, 0.46, strokeMat);
-        addLineTo(rock, [new THREE.Vector3(-0.26, 0.10, 0), new THREE.Vector3(-0.05, 0.26, 0), new THREE.Vector3(0.18, 0.12, 0)], strokeMat);
-        addLineTo(rock, [new THREE.Vector3(-0.18, -0.16, 0), new THREE.Vector3(0.10, -0.24, 0), new THREE.Vector3(0.28, -0.02, 0)], strokeMat);
-        rock.visible = false;
-        group.add(rock);
-
-        boulders.push({ group, crack, shadow, rock, triggerX, groundY, dropX, topY, y: topY, state: 'idle', timer: 0, hit: false });
-      }
-
-      function createSwingingAxe(anchorX, anchorY, length = 2.1, amplitude = 0.72, speed = 0.045) {
-        const group = new THREE.Group();
-        group.position.set(anchorX, anchorY, 0.07);
-        scene.add(group);
-
-        const arm = new THREE.Group();
-        addLineTo(arm, [new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, -length, 0)], strokeMat);
-        const bladeY = -length;
-        addLineTo(arm, [new THREE.Vector3(-0.38, bladeY + 0.08, 0), new THREE.Vector3(0, bladeY - 0.30, 0), new THREE.Vector3(0.38, bladeY + 0.08, 0)], strokeMat);
-        addLineTo(arm, [new THREE.Vector3(-0.28, bladeY + 0.24, 0), new THREE.Vector3(0.28, bladeY + 0.24, 0)], strokeMat);
-        group.add(arm);
-        drawCircle(group, 0, 0, 0.10, strokeMat);
-
-        const warn = new THREE.Group();
-        warn.position.set(0, -length, 0.02);
-        makePulseCircle(warn, 0.58, softStrokeMat);
-        group.add(warn);
-
-        swingingAxes.push({ group, arm, warn, anchorX, anchorY, length, amplitude, speed, phase: Math.random() * Math.PI * 2 });
-      }
-
-      function createSawBlade(minX, maxX, y, speed = 0.045) {
-        const group = new THREE.Group();
-        group.position.set(0, 0, 0.08);
-        scene.add(group);
-
-        const rail = new THREE.Group();
-        addLineTo(rail, [new THREE.Vector3(minX, y, 0), new THREE.Vector3(maxX, y, 0)], softStrokeMat);
-        group.add(rail);
-
-        const saw = new THREE.Group();
-        saw.position.set(minX, y, 0.08);
-        drawCircle(saw, 0, 0, 0.34, strokeMat);
-        for (let i = 0; i < 8; i++) {
-          const a = i / 8 * Math.PI * 2;
-          const a2 = a + Math.PI / 8;
-          addLineTo(saw, [
-            new THREE.Vector3(Math.cos(a) * 0.34, Math.sin(a) * 0.34, 0),
-            new THREE.Vector3(Math.cos(a2) * 0.52, Math.sin(a2) * 0.52, 0)
-          ], strokeMat);
+      function createRisingSpikeTrap(x1, x2, y) {
+        const group = new THREE.Group(); group.position.set(0, 0, 0.09); scene.add(group);
+        addLineTo(group, [new THREE.Vector3(x1, y + 0.02, 0), new THREE.Vector3(x2, y + 0.02, 0)], softStrokeMat);
+        const spikesGroup = new THREE.Group(); group.add(spikesGroup);
+        for (let x = x1; x <= x2; x += 0.45) {
+          addLineTo(spikesGroup, [new THREE.Vector3(x, y + 0.02, 0), new THREE.Vector3(x + 0.18, y + 0.52, 0), new THREE.Vector3(x + 0.36, y + 0.02, 0)], strokeMat);
         }
-        group.add(saw);
-
-        const warn = new THREE.Group();
-        warn.position.set((minX + maxX) * 0.5, y, 0.03);
-        addLineTo(warn, [new THREE.Vector3(-0.34, 0.42, 0), new THREE.Vector3(0, 0.68, 0), new THREE.Vector3(0.34, 0.42, 0)], softStrokeMat);
-        group.add(warn);
-
-        sawBlades.push({ group, rail, saw, warn, minX, maxX, y, speed, t: 0, x: minX });
+        const warn = new THREE.Group(); warn.position.set((x1 + x2) * 0.5, y + 0.18, 0.03); makePulseCircle(warn, 0.62, softStrokeMat); group.add(warn);
+        advancedObstacles.push({ type: 'risingSpikes', group, spikesGroup, warn, x1, x2, y, timer: 0 });
       }
 
-      function createRollingSpikedLog(minX, maxX, y, speed = 0.045) {
-        const group = new THREE.Group();
-        group.position.set(0, 0, 0.09);
-        scene.add(group);
-        addLineTo(group, [new THREE.Vector3(minX, y + 0.48, 0), new THREE.Vector3(maxX, y + 0.48, 0)], softStrokeMat);
-        const log = new THREE.Group();
-        log.position.set(minX, y + 0.48, 0.08);
-        drawCircle(log, 0, 0, 0.42, strokeMat);
-        for (let i = 0; i < 10; i++) {
-          const a = i / 10 * Math.PI * 2;
-          addLineTo(log, [
-            new THREE.Vector3(Math.cos(a) * 0.28, Math.sin(a) * 0.28, 0),
-            new THREE.Vector3(Math.cos(a) * 0.66, Math.sin(a) * 0.66, 0)
-          ], strokeMat);
-        }
-        group.add(log);
-        const warn = new THREE.Group();
-        warn.position.set((minX + maxX) * 0.5, y + 0.48, 0.03);
-        makePulseCircle(warn, 0.68, softStrokeMat);
-        group.add(warn);
-        rollingLogs.push({ group, log, warn, minX, maxX, y: y + 0.48, speed, dir: 1, x: minX });
+      function createPulseLaserGate(x1, x2, y, vertical = false) {
+        const group = new THREE.Group(); group.position.set(0, 0, 0.10); scene.add(group);
+        const beam = new THREE.Group(); group.add(beam);
+        if (vertical) addLineTo(beam, [new THREE.Vector3(x1, y, 0), new THREE.Vector3(x1, y + 3.0, 0)], strokeMat);
+        else addLineTo(beam, [new THREE.Vector3(x1, y, 0), new THREE.Vector3(x2, y, 0)], strokeMat);
+        const warn = new THREE.Group(); warn.position.set(vertical ? x1 : (x1 + x2) * 0.5, vertical ? y + 1.5 : y, 0.03); makePulseCircle(warn, 0.58, softStrokeMat); group.add(warn);
+        advancedObstacles.push({ type: 'pulseLaser', group, beam, warn, x1, x2, y, vertical, timer: 0, active: false });
       }
 
-      function createCrushingWallTrap(centerX, y, openGap = 2.7, blockW = 0.72, blockH = 2.25) {
-        const group = new THREE.Group();
-        group.position.set(0, 0, 0.08);
-        scene.add(group);
-        const railY = y + blockH * 0.5;
-        addLineTo(group, [new THREE.Vector3(centerX - openGap, railY, 0), new THREE.Vector3(centerX + openGap, railY, 0)], softStrokeMat);
-        const makeBlock = () => {
-          const b = new THREE.Group();
-          addLineTo(b, [
-            new THREE.Vector3(-blockW * 0.5, 0, 0), new THREE.Vector3(blockW * 0.5, 0, 0),
-            new THREE.Vector3(blockW * 0.5, blockH, 0), new THREE.Vector3(-blockW * 0.5, blockH, 0),
-            new THREE.Vector3(-blockW * 0.5, 0, 0)
-          ], strokeMat);
-          addLineTo(b, [new THREE.Vector3(-blockW * 0.35, 0.28, 0), new THREE.Vector3(blockW * 0.35, blockH - 0.28, 0)], softStrokeMat);
-          return b;
-        };
-        const left = makeBlock();
-        const right = makeBlock();
-        group.add(left); group.add(right);
-        const warn = new THREE.Group();
-        warn.position.set(centerX, y + blockH * 0.52, 0.04);
-        makePulseCircle(warn, 0.76, softStrokeMat);
-        group.add(warn);
-        crushingWalls.push({ group, left, right, warn, centerX, y, openGap, blockW, blockH, cycle: 0, closed: false });
+      function createRotatingMace(anchorX, anchorY, radius = 1.25, speed = 0.045) {
+        const group = new THREE.Group(); group.position.set(anchorX, anchorY, 0.10); scene.add(group);
+        const arm = new THREE.Group(); group.add(arm);
+        addLineTo(arm, [new THREE.Vector3(0, 0, 0), new THREE.Vector3(radius, 0, 0)], strokeMat);
+        const head = new THREE.Group(); head.position.set(radius, 0, 0.04); drawCircle(head, 0, 0, 0.32, strokeMat);
+        for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; addLineTo(head, [new THREE.Vector3(Math.cos(a) * 0.25, Math.sin(a) * 0.25, 0), new THREE.Vector3(Math.cos(a) * 0.48, Math.sin(a) * 0.48, 0)], strokeMat); }
+        arm.add(head); const warn = new THREE.Group(); makePulseCircle(warn, radius + 0.12, softStrokeMat); group.add(warn);
+        advancedObstacles.push({ type: 'rotatingMace', group, arm, warn, anchorX, anchorY, radius, speed, phase: Math.random() * Math.PI * 2 });
       }
 
-      function createWindGustEmitter(x1, x2, y, strength = 0.038) {
-        const group = new THREE.Group();
-        group.position.set(0, 0, 0.07);
-        scene.add(group);
-        const emitter = new THREE.Group();
-        emitter.position.set(x1, y + 0.45, 0);
-        addLineTo(emitter, [new THREE.Vector3(-0.25, -0.45, 0), new THREE.Vector3(0.25, -0.25, 0), new THREE.Vector3(0.25, 1.35, 0), new THREE.Vector3(-0.25, 1.55, 0), new THREE.Vector3(-0.25, -0.45, 0)], strokeMat);
-        group.add(emitter);
-        const waves = [];
-        for (let i = 0; i < 5; i++) {
-          const w = new THREE.Group();
-          const base = y + 0.55 + i * 0.24;
-          addLineTo(w, [
-            new THREE.Vector3(x1 + 0.6, base, 0),
-            new THREE.Vector3(x1 + 1.1, base + 0.16, 0),
-            new THREE.Vector3(x1 + 1.7, base - 0.12, 0),
-            new THREE.Vector3(x1 + 2.4, base + 0.12, 0)
-          ], softStrokeMat);
-          group.add(w);
-          waves.push(w);
-        }
-        const warn = new THREE.Group();
-        warn.position.set((x1 + x2) * 0.5, y + 1.1, 0.03);
-        addLineTo(warn, [new THREE.Vector3(-0.42, 0.40, 0), new THREE.Vector3(0, 0.70, 0), new THREE.Vector3(0.42, 0.40, 0)], softStrokeMat);
-        group.add(warn);
-        windEmitters.push({ group, waves, warn, x1, x2, y, strength, dir: 1, timer: 0 });
+      function createVerticalStomper(x, y, topY, width = 1.4) {
+        const group = new THREE.Group(); group.position.set(0, 0, 0.10); scene.add(group);
+        addLineTo(group, [new THREE.Vector3(x, y, 0), new THREE.Vector3(x, topY, 0)], softStrokeMat);
+        const press = new THREE.Group(); press.position.set(x, topY, 0.06);
+        addLineTo(press, [new THREE.Vector3(-width * 0.5, 0, 0), new THREE.Vector3(width * 0.5, 0, 0), new THREE.Vector3(width * 0.5, 0.42, 0), new THREE.Vector3(-width * 0.5, 0.42, 0), new THREE.Vector3(-width * 0.5, 0, 0)], strokeMat);
+        group.add(press); const warn = new THREE.Group(); warn.position.set(x, y + 0.12, 0.03); makePulseCircle(warn, 0.72, softStrokeMat); group.add(warn);
+        advancedObstacles.push({ type: 'stomper', group, press, warn, x, y, topY, width, timer: 0 });
       }
 
-      function createSpearTurret(x, y, dir = -1) {
-        const group = new THREE.Group();
-        group.position.set(x, y, 0.08);
-        scene.add(group);
-        const body = new THREE.Group();
-        drawCircle(body, 0, 0.55, 0.28, strokeMat);
-        addLineTo(body, [new THREE.Vector3(0, 0.30, 0), new THREE.Vector3(0, -0.35, 0)], strokeMat);
-        addLineTo(body, [new THREE.Vector3(0, 0.10, 0), new THREE.Vector3(0.55 * dir, 0.38, 0)], strokeMat);
-        group.add(body);
-        const charge = new THREE.Group();
-        charge.position.set(0.62 * dir, 0.38, 0.02);
-        makePulseCircle(charge, 0.38, softStrokeMat);
-        charge.visible = false;
-        group.add(charge);
-        spearTurrets.push({ group, body, charge, x, y, dir: dir >= 0 ? 1 : -1, timer: 0, charging: false, projectiles: [] });
+      function createDaggerRing(centerX, centerY, radius = 1.05, speed = 0.055) {
+        const group = new THREE.Group(); group.position.set(centerX, centerY, 0.10); scene.add(group);
+        const warn = new THREE.Group(); makePulseCircle(warn, radius + 0.18, softStrokeMat); group.add(warn);
+        const blades = new THREE.Group(); group.add(blades);
+        for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; addLineTo(blades, [new THREE.Vector3(Math.cos(a) * (radius - 0.25), Math.sin(a) * (radius - 0.25), 0), new THREE.Vector3(Math.cos(a) * (radius + 0.42), Math.sin(a) * (radius + 0.42), 0)], strokeMat); }
+        advancedObstacles.push({ type: 'daggerRing', group, warn, blades, centerX, centerY, radius, speed });
       }
 
-      function spawnSpearProjectile(turret) {
-        const spear = new THREE.Group();
-        const dir = turret.dir;
-        addLineTo(spear, [new THREE.Vector3(0, 0, 0), new THREE.Vector3(1.05 * dir, 0, 0)], strokeMat);
-        addLineTo(spear, [
-          new THREE.Vector3(1.05 * dir, 0, 0),
-          new THREE.Vector3(0.78 * dir, 0.16, 0),
-          new THREE.Vector3(0.78 * dir, -0.16, 0),
-          new THREE.Vector3(1.05 * dir, 0, 0)
-        ], strokeMat);
-        spear.position.set(turret.x + 0.72 * dir, turret.y + 0.38, 0.13);
-        scene.add(spear);
-        turret.projectiles.push({ group: spear, x: spear.position.x, y: spear.position.y, dir, life: 190, hit: false });
-        playSfx('enemyAttack');
+      function createBouncingOrb(x1, x2, y1, y2, speed = 0.04) {
+        const group = new THREE.Group(); group.position.set(0, 0, 0.10); scene.add(group);
+        addLineTo(group, [new THREE.Vector3(x1, y1, 0), new THREE.Vector3(x2, y2, 0)], softStrokeMat);
+        const orb = new THREE.Group(); orb.position.set(x1, y1, 0.08); drawCircle(orb, 0, 0, 0.38, strokeMat); addLineTo(orb, [new THREE.Vector3(-0.26, 0, 0), new THREE.Vector3(0.26, 0, 0)], strokeMat); group.add(orb);
+        const warn = new THREE.Group(); warn.position.set((x1 + x2) * 0.5, (y1 + y2) * 0.5, 0.03); makePulseCircle(warn, 0.58, softStrokeMat); group.add(warn);
+        advancedObstacles.push({ type: 'bouncingOrb', group, orb, warn, x1, x2, y1, y2, speed, t: 0 });
       }
 
-      function updateDynamicObstacles(frameScale) {
+      function createCeilingNeedles(x1, x2, y, topY) {
+        const group = new THREE.Group(); group.position.set(0, 0, 0.10); scene.add(group);
+        const needles = new THREE.Group(); group.add(needles);
+        for (let x = x1; x <= x2; x += 0.55) addLineTo(needles, [new THREE.Vector3(x, topY, 0), new THREE.Vector3(x + 0.22, topY - 0.68, 0), new THREE.Vector3(x + 0.44, topY, 0)], strokeMat);
+        const warn = new THREE.Group(); warn.position.set((x1 + x2) * 0.5, y + 0.18, 0.03); makePulseCircle(warn, 0.82, softStrokeMat); group.add(warn);
+        advancedObstacles.push({ type: 'ceilingNeedles', group, needles, warn, x1, x2, y, topY, timer: 0 });
+      }
+
+      function createSlidingBladeGate(x, y1, y2, speed = 0.055) {
+        const group = new THREE.Group(); group.position.set(0, 0, 0.10); scene.add(group);
+        addLineTo(group, [new THREE.Vector3(x, y1, 0), new THREE.Vector3(x, y2, 0)], softStrokeMat);
+        const blade = new THREE.Group(); blade.position.set(x, y1, 0.07); addLineTo(blade, [new THREE.Vector3(-0.45, 0, 0), new THREE.Vector3(0, 0.52, 0), new THREE.Vector3(0.45, 0, 0), new THREE.Vector3(0, -0.52, 0), new THREE.Vector3(-0.45, 0, 0)], strokeMat); group.add(blade);
+        const warn = new THREE.Group(); warn.position.set(x, (y1 + y2) * 0.5, 0.03); makePulseCircle(warn, 0.55, softStrokeMat); group.add(warn);
+        advancedObstacles.push({ type: 'slidingBladeGate', group, blade, warn, x, y1, y2, speed, t: 0 });
+      }
+
+      function createShadowSlash(x, y, width = 2.4) {
+        const group = new THREE.Group(); group.position.set(0, 0, 0.10); scene.add(group);
+        const warn = new THREE.Group(); warn.position.set(x, y + 0.45, 0.03); makePulseCircle(warn, 0.82, softStrokeMat); group.add(warn);
+        const slash = new THREE.Group(); slash.position.set(x, y + 0.45, 0.08); addLineTo(slash, [new THREE.Vector3(-width * 0.5, -0.35, 0), new THREE.Vector3(width * 0.5, 0.35, 0)], strokeMat); addLineTo(slash, [new THREE.Vector3(-width * 0.35, 0.35, 0), new THREE.Vector3(width * 0.35, -0.35, 0)], strokeMat); slash.visible = false; group.add(slash);
+        advancedObstacles.push({ type: 'shadowSlash', group, warn, slash, x, y, width, timer: 0, active: false });
+      }
+
+      function createWindmillBlades(x, y, radius = 1.05, speed = 0.075) {
+        const group = new THREE.Group(); group.position.set(x, y, 0.10); scene.add(group);
+        const blades = new THREE.Group(); group.add(blades); drawCircle(group, 0, 0, 0.13, strokeMat);
+        for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2; addLineTo(blades, [new THREE.Vector3(0, 0, 0), new THREE.Vector3(Math.cos(a) * radius, Math.sin(a) * radius, 0)], strokeMat); addLineTo(blades, [new THREE.Vector3(Math.cos(a) * radius, Math.sin(a) * radius, 0), new THREE.Vector3(Math.cos(a + 0.22) * (radius + 0.32), Math.sin(a + 0.22) * (radius + 0.32), 0)], strokeMat); }
+        const warn = new THREE.Group(); makePulseCircle(warn, radius + 0.25, softStrokeMat); group.add(warn);
+        advancedObstacles.push({ type: 'windmillBlades', group, blades, warn, x, y, radius, speed });
+      }
+
+      function createCrossZapTrap(x, y, width = 2.2, height = 2.8) {
+        const group = new THREE.Group(); group.position.set(0, 0, 0.10); scene.add(group);
+        const warn = new THREE.Group(); warn.position.set(x, y + height * 0.5, 0.03); makePulseCircle(warn, 0.78, softStrokeMat); group.add(warn);
+        const zap = new THREE.Group(); group.add(zap);
+        addLineTo(zap, [new THREE.Vector3(x - width * 0.5, y, 0), new THREE.Vector3(x + width * 0.5, y + height, 0)], strokeMat);
+        addLineTo(zap, [new THREE.Vector3(x + width * 0.5, y, 0), new THREE.Vector3(x - width * 0.5, y + height, 0)], strokeMat);
+        zap.visible = false;
+        advancedObstacles.push({ type: 'crossZap', group, warn, zap, x, y, width, height, timer: 0 });
+      }
+
+      function updateAdvancedObstacles(frameScale) {
         const px = playerGroup.position.x;
         const py = playerGroup.position.y;
-
-        for (const b of boulders) {
-          if (b.state === 'idle' && Math.abs(px - b.triggerX) < 0.55 && Math.abs(py - b.groundY) < 0.65) {
-            b.state = 'warning';
-            b.timer = 48;
-            b.shadow.visible = true;
-            b.rock.visible = true;
-            b.rock.position.y = b.topY;
-            b.y = b.topY;
-            playSfx('enemyAttack');
-          }
-          if (b.state === 'warning') {
-            b.timer -= frameScale;
-            const pulse = 1 + Math.sin(animTime * 0.42) * 0.18;
-            b.shadow.scale.set(pulse, pulse, 1);
-            if (b.timer <= 0) b.state = 'drop';
-          } else if (b.state === 'drop') {
-            b.y -= 0.26 * frameScale;
-            b.rock.position.y = b.y;
-            if (!b.hit && Math.abs(px - b.dropX) < 0.62 && Math.abs((py + 0.75) - b.y) < 0.82) {
-              b.hit = true;
-              playerVelocity.x = px < b.dropX ? -0.18 : 0.18;
-              playerVelocity.y = 0.20;
-              applyDamage(1, 'CRUSHED!');
+        const bodyY = py + 0.72;
+        for (const o of advancedObstacles) {
+          if (o.type === 'risingSpikes') {
+            o.timer = (o.timer + frameScale) % 210;
+            const active = o.timer > 130 && o.timer < 185;
+            const warning = o.timer > 95 && o.timer <= 130;
+            o.warn.visible = warning;
+            const rise = active ? 1 : warning ? Math.abs(Math.sin(animTime * 0.25)) * 0.45 : 0;
+            o.spikesGroup.position.y = rise * 0.42;
+            if (active && px > o.x1 && px < o.x2 && Math.abs(py - o.y) < 0.45) { playerVelocity.y = Math.max(playerVelocity.y, 0.18); applyDamage(1, 'SPIKED!'); }
+          } else if (o.type === 'pulseLaser') {
+            o.timer = (o.timer + frameScale) % 180; o.active = o.timer > 95 && o.timer < 145; o.beam.visible = o.active; o.warn.visible = o.timer > 65 && o.timer <= 95;
+            if (o.active) {
+              if (o.vertical) { if (Math.abs(px - o.x1) < 0.38 && bodyY > o.y && bodyY < o.y + 3.0) { playerVelocity.x = px < o.x1 ? -0.2 : 0.2; applyDamage(1, 'BURNED!'); } }
+              else if (px > o.x1 && px < o.x2 && Math.abs(bodyY - o.y) < 0.35) { playerVelocity.y = Math.max(playerVelocity.y, 0.15); applyDamage(1, 'BURNED!'); }
             }
-            if (b.y <= b.groundY + 0.48) {
-              b.y = b.groundY + 0.48;
-              b.rock.position.y = b.y;
-              b.state = 'landed';
-              b.timer = 70;
-              cameraShake = Math.max(cameraShake, 0.08);
-              burst(b.dropX, b.groundY + 0.45, 8);
-            }
-          } else if (b.state === 'landed') {
-            b.timer -= frameScale;
-            if (b.timer <= 0) {
-              b.state = 'idle';
-              b.hit = false;
-              b.shadow.visible = false;
-              b.rock.visible = false;
-              b.rock.position.y = b.topY;
-            }
-          }
-        }
-
-        for (const a of swingingAxes) {
-          const angle = Math.sin(animTime * a.speed + a.phase) * a.amplitude;
-          a.arm.rotation.z = angle;
-          const bladeX = a.anchorX + Math.sin(angle) * a.length;
-          const bladeY = a.anchorY - Math.cos(angle) * a.length;
-          const pulse = 1 + Math.abs(Math.sin(animTime * 0.12 + a.phase)) * 0.16;
-          a.warn.scale.set(pulse, pulse, 1);
-          if (Math.abs(px - bladeX) < 0.62 && Math.abs((py + 0.75) - bladeY) < 0.62) {
-            playerVelocity.x = px < bladeX ? -0.14 : 0.14;
-            applyDamage(1, 'AXED!');
-          }
-        }
-
-        for (const s of sawBlades) {
-          s.t += s.speed * frameScale;
-          const u = (Math.sin(s.t) + 1) * 0.5;
-          s.x = s.minX + (s.maxX - s.minX) * u;
-          s.saw.position.x = s.x;
-          s.saw.position.y = s.y;
-          s.saw.rotation.z -= 0.22 * frameScale;
-          const pulse = 1 + Math.abs(Math.sin(animTime * 0.16)) * 0.10;
-          s.warn.scale.set(pulse, pulse, 1);
-          if (Math.abs(px - s.x) < 0.62 && Math.abs((py + 0.55) - s.y) < 0.62) {
-            playerVelocity.x = px < s.x ? -0.24 : 0.24;
-            playerVelocity.y = Math.max(playerVelocity.y, 0.14);
-            applyDamage(1, 'SAWED!');
-          }
-        }
-
-
-        for (const l of rollingLogs) {
-          l.x += l.speed * l.dir * frameScale;
-          if (l.x <= l.minX) { l.x = l.minX; l.dir = 1; }
-          if (l.x >= l.maxX) { l.x = l.maxX; l.dir = -1; }
-          l.log.position.x = l.x;
-          l.log.rotation.z -= 0.15 * l.dir * frameScale;
-          const pulse = 1 + Math.abs(Math.sin(animTime * 0.13)) * 0.10;
-          l.warn.scale.set(pulse, pulse, 1);
-          if (Math.abs(px - l.x) < 0.72 && Math.abs((py + 0.55) - l.y) < 0.72) {
-            playerVelocity.x = px < l.x ? -0.26 : 0.26;
-            playerVelocity.y = Math.max(playerVelocity.y, 0.16);
-            applyDamage(1, 'LOGGED!');
-          }
-        }
-
-        for (const c of crushingWalls) {
-          c.cycle = (c.cycle + frameScale) % 300;
-          const closing = c.cycle >= 210 && c.cycle < 240;
-          const closed = c.cycle >= 240;
-          const opening = c.cycle < 30;
-          let t = 0;
-          if (closing) t = (c.cycle - 210) / 30;
-          else if (closed) t = 1;
-          else if (opening) t = 1 - (c.cycle / 30);
-          const openOffset = c.openGap * 0.5;
-          const closedOffset = c.blockW * 0.55;
-          const offset = openOffset + (closedOffset - openOffset) * Math.max(0, Math.min(1, t));
-          c.left.position.set(c.centerX - offset, c.y, 0.08);
-          c.right.position.set(c.centerX + offset, c.y, 0.08);
-          c.warn.visible = c.cycle >= 170 || closed;
-          const pulse = 1 + Math.abs(Math.sin(animTime * 0.22)) * 0.20;
-          c.warn.scale.set(pulse, pulse, 1);
-          const bodyY = py + 0.75;
-          const withinY = bodyY > c.y - 0.15 && bodyY < c.y + c.blockH + 0.15;
-          const hitLeft = Math.abs(px - (c.centerX - offset)) < c.blockW * 0.72 && withinY;
-          const hitRight = Math.abs(px - (c.centerX + offset)) < c.blockW * 0.72 && withinY;
-          if ((hitLeft || hitRight) && t > 0.55) {
-            playerVelocity.x = px < c.centerX ? -0.22 : 0.22;
-            playerVelocity.y = Math.max(playerVelocity.y, 0.12);
-            applyDamage(1, 'CRUSHED!');
-          }
-        }
-
-        for (const w of windEmitters) {
-          w.timer += frameScale;
-          if (w.timer >= 180) { w.timer = 0; w.dir *= -1; }
-          const phase = animTime * 0.08 * w.dir;
-          w.waves.forEach((wave, idx) => {
-            const travel = ((phase + idx * 0.55) % 3.8 + 3.8) % 3.8;
-            wave.position.x = w.dir > 0 ? travel : -travel;
-            wave.position.y = Math.sin(animTime * 0.08 + idx) * 0.05;
-          });
-          w.warn.rotation.z = w.dir > 0 ? 0 : Math.PI;
-          w.warn.scale.set(1 + Math.abs(Math.sin(animTime * 0.11)) * 0.16, 1, 1);
-          if (px > w.x1 && px < w.x2 && py > w.y - 0.4 && py < w.y + 2.2) {
-            const blockFactor = keys.ArrowDown && onGround ? 0.28 : 1;
-            playerVelocity.x += w.strength * w.dir * blockFactor * frameScale;
-            if (Math.abs(playerVelocity.x) > 0.22) playerVelocity.x = 0.22 * Math.sign(playerVelocity.x);
-          }
-        }
-
-        for (const t of spearTurrets) {
-          t.timer = (t.timer + frameScale) % 240;
-          t.charging = t.timer >= 120;
-          t.charge.visible = t.charging;
-          if (t.charging) {
-            const pulse = 1 + Math.abs(Math.sin(animTime * 0.28)) * 0.35;
-            t.charge.scale.set(pulse, pulse, 1);
-          }
-          if (t.timer < frameScale + 0.1) spawnSpearProjectile(t);
-          for (let i = t.projectiles.length - 1; i >= 0; i--) {
-            const sp = t.projectiles[i];
-            sp.life -= frameScale;
-            sp.x += 0.095 * sp.dir * frameScale;
-            sp.group.position.x = sp.x;
-            if (!sp.hit && Math.abs(px - sp.x) < 0.72 && Math.abs((py + 0.72) - sp.y) < 0.46) {
-              sp.hit = true;
-              playerVelocity.x = sp.dir * 0.22;
+          } else if (o.type === 'rotatingMace') {
+            const a = animTime * o.speed + o.phase; o.arm.rotation.z = a; o.warn.scale.set(1 + Math.abs(Math.sin(animTime * 0.11)) * 0.08, 1 + Math.abs(Math.sin(animTime * 0.11)) * 0.08, 1);
+            const hx = o.anchorX + Math.cos(a) * o.radius, hy = o.anchorY + Math.sin(a) * o.radius;
+            if (Math.abs(px - hx) < 0.58 && Math.abs(bodyY - hy) < 0.58) { playerVelocity.x = px < hx ? -0.22 : 0.22; applyDamage(1, 'SMASHED!'); }
+          } else if (o.type === 'stomper') {
+            o.timer = (o.timer + frameScale) % 190; const falling = o.timer > 105 && o.timer < 135; const down = o.timer >= 135 && o.timer < 160; const reset = o.timer >= 160;
+            let y = o.topY; if (falling) y = o.topY + (o.y + 0.52 - o.topY) * ((o.timer - 105) / 30); else if (down) y = o.y + 0.52; else if (reset) y = o.y + 0.52 + (o.topY - o.y - 0.52) * ((o.timer - 160) / 30);
+            o.press.position.y = y; o.warn.visible = o.timer > 75 && o.timer <= 105;
+            if ((falling || down) && Math.abs(px - o.x) < o.width * 0.6 && bodyY > o.y && bodyY < y + 0.6) { playerVelocity.y = 0.2; applyDamage(1, 'CRUSHED!'); }
+          } else if (o.type === 'daggerRing') {
+            o.blades.rotation.z += o.speed * frameScale;
+            if (o.warn) o.warn.scale.set(1 + Math.abs(Math.sin(animTime * 0.16)) * 0.12, 1 + Math.abs(Math.sin(animTime * 0.16)) * 0.12, 1);
+            const dx = px - o.centerX, dy = bodyY - o.centerY; const d = Math.hypot(dx, dy);
+            if (d > o.radius - 0.42 && d < o.radius + 0.62) { playerVelocity.x = dx < 0 ? -0.2 : 0.2; applyDamage(1, 'CUT!'); }
+          } else if (o.type === 'bouncingOrb') {
+            o.t += o.speed * frameScale; const u = (Math.sin(o.t) + 1) * 0.5; const x = o.x1 + (o.x2 - o.x1) * u, y = o.y1 + (o.y2 - o.y1) * u; o.orb.position.set(x, y, 0.08); o.orb.rotation.z += 0.12 * frameScale;
+            if (Math.abs(px - x) < 0.58 && Math.abs(bodyY - y) < 0.58) { playerVelocity.x = px < x ? -0.2 : 0.2; playerVelocity.y = Math.max(playerVelocity.y, 0.16); applyDamage(1, 'HIT!'); }
+          } else if (o.type === 'ceilingNeedles') {
+            o.timer = (o.timer + frameScale) % 220; const warning = o.timer > 95 && o.timer < 130; const falling = o.timer >= 130 && o.timer < 165; const bottom = o.y + 0.8; o.warn.visible = warning;
+            let yOff = 0; if (falling) yOff = (bottom - o.topY) * ((o.timer - 130) / 35); else if (o.timer >= 165 && o.timer < 190) yOff = bottom - o.topY; o.needles.position.y = yOff;
+            if ((falling || (o.timer >= 165 && o.timer < 190)) && px > o.x1 && px < o.x2 && bodyY < o.topY + yOff + 0.2 && bodyY > bottom - 0.5) { playerVelocity.y = 0.18; applyDamage(1, 'PIERCED!'); }
+          } else if (o.type === 'slidingBladeGate') {
+            o.t += o.speed * frameScale; const u = (Math.sin(o.t) + 1) * 0.5; const y = o.y1 + (o.y2 - o.y1) * u; o.blade.position.y = y; o.blade.rotation.z += 0.09 * frameScale;
+            if (Math.abs(px - o.x) < 0.55 && Math.abs(bodyY - y) < 0.7) { playerVelocity.x = px < o.x ? -0.2 : 0.2; applyDamage(1, 'SLICED!'); }
+          } else if (o.type === 'shadowSlash') {
+            o.timer = (o.timer + frameScale) % 170; const warning = o.timer > 85 && o.timer < 125; const active = o.timer >= 125 && o.timer < 145; o.warn.visible = warning; o.slash.visible = active;
+            if (active && Math.abs(px - o.x) < o.width * 0.58 && Math.abs(bodyY - (o.y + 0.45)) < 0.9) { playerVelocity.x = px < o.x ? -0.22 : 0.22; applyDamage(1, 'SLASHED!'); }
+          } else if (o.type === 'windmillBlades') {
+            o.blades.rotation.z += o.speed * frameScale; o.warn.scale.set(1 + Math.abs(Math.sin(animTime * 0.12)) * 0.08, 1 + Math.abs(Math.sin(animTime * 0.12)) * 0.08, 1);
+            const dx = px - o.x, dy = bodyY - o.y; if (Math.hypot(dx, dy) < o.radius + 0.35) { playerVelocity.x = dx < 0 ? -0.23 : 0.23; playerVelocity.y = Math.max(playerVelocity.y, 0.12); applyDamage(1, 'BLADED!'); }
+          } else if (o.type === 'crossZap') {
+            o.timer = (o.timer + frameScale) % 190;
+            const warning = o.timer > 75 && o.timer <= 120;
+            const active = o.timer > 120 && o.timer < 145;
+            o.warn.visible = warning;
+            o.zap.visible = active;
+            if (warning) o.warn.scale.set(1 + Math.abs(Math.sin(animTime * 0.24)) * 0.18, 1 + Math.abs(Math.sin(animTime * 0.24)) * 0.18, 1);
+            if (active && Math.abs(px - o.x) < o.width * 0.58 && bodyY > o.y - 0.1 && bodyY < o.y + o.height + 0.1) {
+              playerVelocity.x = px < o.x ? -0.22 : 0.22;
               playerVelocity.y = Math.max(playerVelocity.y, 0.12);
-              applyDamage(1, 'SPEARED!');
-            }
-            if (sp.life <= 0 || Math.abs(sp.x - t.x) > 18 || sp.hit) {
-              disposeObjectTree(sp.group);
-              t.projectiles.splice(i, 1);
+              applyDamage(1, 'ZAPPED!');
             }
           }
         }
+      }
+
+      function placeBibleObstacle(kind, x, y, span = 3.0) {
+        const dangerSpan = Math.max(2.8, span);
+        switch (kind) {
+          case 'risingSpikes': createRisingSpikeTrap(x - dangerSpan * 0.52, x + dangerSpan * 0.52, y); break;
+          case 'pulseLaser': createPulseLaserGate(x - dangerSpan * 0.58, x + dangerSpan * 0.58, y + 0.72, false); break;
+          case 'rotatingMace': createRotatingMace(x, y + 1.85, 1.42, 0.066); break;
+          case 'stomper': createVerticalStomper(x, y, y + 2.75, 1.85); break;
+          case 'daggerRing': createDaggerRing(x, y + 0.92, 0.92, 0.078); break;
+          case 'bouncingOrb': createBouncingOrb(x - 2.35, x + 2.35, y + 0.58, y + 1.78, 0.062); break;
+          case 'ceilingNeedles': createCeilingNeedles(x - dangerSpan * 0.55, x + dangerSpan * 0.55, y, y + 2.70); break;
+          case 'slidingBladeGate': createSlidingBladeGate(x, y + 0.25, y + 2.45, 0.076); break;
+          case 'shadowSlash': createShadowSlash(x, y, Math.max(2.8, dangerSpan)); break;
+          case 'windmillBlades': createWindmillBlades(x, y + 0.95, 1.02, 0.105); break;
+          case 'crossZap': createCrossZapTrap(x, y + 0.10, Math.max(2.4, dangerSpan), 2.35); break;
+        }
+      }
+
+      function getBibleTierStep(levelNumber, index, offset = 0) {
+        const steps = [2.2, 2.5, 2.8];
+        return steps[(levelNumber + index + offset) % steps.length];
+      }
+
+      function getBibleGap(levelNumber, index) {
+        const gaps = [0.8, 1.2, 1.8, 2.2, 2.6];
+        return gaps[(levelNumber * 2 + index * 3) % gaps.length];
+      }
+
+      function getBiblePlatformLength(levelNumber, index) {
+        const lens = [3.4, 5.2, 7.0, 4.2, 8.4, 6.2, 10.2, 3.8, 11.4, 5.8];
+        return lens[(levelNumber + index * 2) % lens.length];
+      }
+
+      function computeBiblePathY(levelNumber, count) {
+        const profiles = {
+          4:  [0, 2.5, 0, 2.2],
+          5:  [0, 2.2, 4.7, 2.2, 5.0],
+          6:  [2.2, 0, 2.8, 5.3, 2.8, 5.6],
+          7:  [0, 2.8, 5.3, 2.5, 0, 2.2, 4.7],
+          8:  [2.5, 0, 2.2, 4.7, 7.5, 5.0, 2.2, 4.7],
+          9:  [0, 2.2, 0, 2.5, 5.0, 7.8, 5.3, 2.8, 5.6],
+          10: [2.8, 5.3, 2.5, 0, 2.2, 4.7, 7.5, 5.0, 2.2, 4.7],
+          11: [0, 2.5, 5.3, 7.5, 5.0, 2.2, 0, 2.8, 5.6, 8.1, 5.3],
+          12: [2.2, 0, 2.5, 5.0, 2.2, 4.7, 7.5, 5.3, 8.1, 5.6, 2.8, 5.3],
+          13: [0, 2.8, 5.3, 2.5, 5.0, 7.8, 10.0, 7.5, 5.0, 2.2, 4.7, 7.5, 5.3],
+          14: [2.5, 0, 2.2, 5.0, 7.5, 5.3, 2.8, 0, 2.5, 5.3, 8.1, 10.6, 8.4, 5.6],
+          15: [0, 2.2, 4.7, 7.5, 5.0, 2.5, 0, 2.8, 5.3, 8.1, 5.6, 2.8, 5.3, 7.5, 10.0],
+          16: [2.8, 5.3, 7.8, 5.0, 2.2, 0, 2.5, 5.0, 7.8, 10.0, 7.5, 5.3, 2.8, 5.6, 8.1, 10.6],
+          17: [0, 2.5, 0, 2.8, 5.6, 8.1, 5.3, 2.5, 4.7, 7.5, 10.3, 7.8, 5.0, 2.2, 4.7, 7.2, 10.0],
+          18: [2.2, 4.7, 7.5, 10.0, 7.2, 4.7, 2.2, 0, 2.8, 5.3, 8.1, 10.6, 8.4, 5.6, 2.8, 5.3, 7.8, 10.3],
+          19: [0, 2.8, 5.3, 2.5, 0, 2.2, 4.7, 7.5, 10.3, 7.8, 5.0, 7.2, 9.7, 6.9, 4.4, 1.6, 4.1, 6.9, 9.4],
+          20: [2.5, 0, 2.2, 4.7, 7.5, 10.0, 7.2, 4.4, 1.9, 4.7, 7.2, 10.0, 8.2, 5.7, 2.9, 5.4, 8.2, 10.4, 7.9, 10.7]
+        };
+        const preset = profiles[levelNumber];
+        if (preset && preset.length === count) return preset.slice();
+        const ys = [];
+        let y = 0;
+        for (let i = 0; i < count; i++) {
+          if (i > 0) {
+            const step = getBibleTierStep(levelNumber, i, i % 2);
+            const dir = ((i + levelNumber) % 5 === 0 || i % 7 === 0) ? -1 : 1;
+            y = Math.max(0, Math.min(10.8, Math.round((y + dir * step) * 10) / 10));
+          }
+          ys.push(y);
+        }
+        return ys;
+      }
+
+      function getLevelArchitecture(levelNumber) {
+        const styles = [
+          'split-islands', 'stepped-zigzag', 'canyon-drop', 'floating-archipelago',
+          'u-switchback', 'spiral-column', 'sawtooth-ridge', 'hourglass',
+          'moon-bridge', 'broken-stairless-climb', 'double-valley', 'high-crown',
+          'inverted-basin', 'long-zigzag', 'terrace-cascade', 'pillar-hop',
+          'final-moon-spine'
+        ];
+        return styles[Math.max(0, Math.min(styles.length - 1, levelNumber - 4))];
+      }
+
+      function getArchitectureTuning(style, levelNumber) {
+        const base = {
+          shelfPattern: 0,
+          noStair: false,
+          stairBias: 0.5,
+          gapOffset: 0,
+          lenOffset: 0,
+          potionBias: 0,
+          enemyBias: 0
+        };
+        const map = {
+          'split-islands': { shelfPattern: 1, noStair: true, gapOffset: 1, lenOffset: 2, potionBias: 1, enemyBias: 0 },
+          'stepped-zigzag': { shelfPattern: 2, noStair: false, stairBias: 0.45, gapOffset: 3, lenOffset: 0, potionBias: 2, enemyBias: 1 },
+          'canyon-drop': { shelfPattern: 3, noStair: true, gapOffset: 4, lenOffset: 3, potionBias: 3, enemyBias: 2 },
+          'floating-archipelago': { shelfPattern: 4, noStair: true, gapOffset: 0, lenOffset: 5, potionBias: 1, enemyBias: 3 },
+          'u-switchback': { shelfPattern: 5, noStair: false, stairBias: 0.72, gapOffset: 2, lenOffset: 1, potionBias: 4, enemyBias: 0 },
+          'spiral-column': { shelfPattern: 6, noStair: false, stairBias: 0.30, gapOffset: 1, lenOffset: 4, potionBias: 2, enemyBias: 4 },
+          'sawtooth-ridge': { shelfPattern: 7, noStair: true, gapOffset: 3, lenOffset: 2, potionBias: 5, enemyBias: 1 },
+          'hourglass': { shelfPattern: 8, noStair: false, stairBias: 0.55, gapOffset: 4, lenOffset: 6, potionBias: 0, enemyBias: 5 },
+          'moon-bridge': { shelfPattern: 9, noStair: true, gapOffset: 0, lenOffset: 7, potionBias: 3, enemyBias: 2 },
+          'broken-stairless-climb': { shelfPattern: 10, noStair: true, gapOffset: 2, lenOffset: 8, potionBias: 1, enemyBias: 6 },
+          'double-valley': { shelfPattern: 11, noStair: false, stairBias: 0.62, gapOffset: 1, lenOffset: 9, potionBias: 4, enemyBias: 3 },
+          'high-crown': { shelfPattern: 12, noStair: false, stairBias: 0.36, gapOffset: 3, lenOffset: 5, potionBias: 6, enemyBias: 4 },
+          'inverted-basin': { shelfPattern: 13, noStair: true, gapOffset: 4, lenOffset: 1, potionBias: 2, enemyBias: 7 },
+          'long-zigzag': { shelfPattern: 14, noStair: false, stairBias: 0.50, gapOffset: 0, lenOffset: 3, potionBias: 5, enemyBias: 0 },
+          'terrace-cascade': { shelfPattern: 15, noStair: true, gapOffset: 2, lenOffset: 6, potionBias: 7, enemyBias: 6 },
+          'pillar-hop': { shelfPattern: 16, noStair: false, stairBias: 0.80, gapOffset: 1, lenOffset: 4, potionBias: 8, enemyBias: 5 },
+          'final-moon-spine': { shelfPattern: 17, noStair: false, stairBias: 0.25, gapOffset: 3, lenOffset: 9, potionBias: 9, enemyBias: 9 }
+        };
+        return Object.assign(base, map[style] || {});
+      }
+
+      function buildBibleLevel(levelNumber, obstacleKinds = []) {
+        createDoor(-7, 0.8, false);
+
+        const style = getLevelArchitecture(levelNumber);
+        const tuning = getArchitectureTuning(style, levelNumber);
+        const pathY = computeBiblePathY(levelNumber, levelNumber);
+        const mainRecords = [];
+        const shelfRecords = [];
+        let cursor = -8;
+        const positiveJumps = [];
+        for (let i = 0; i < levelNumber - 1; i++) {
+          if (pathY[i + 1] > pathY[i]) positiveJumps.push(i);
+        }
+        const wantsStair = !tuning.noStair && positiveJumps.length > 0;
+        const stairIndex = wantsStair ? positiveJumps[Math.max(0, Math.min(positiveJumps.length - 1, Math.floor(positiveJumps.length * tuning.stairBias)))] : -1;
+
+        const oneObstacleIndex = levelNumber <= 10
+          ? Math.max(1, Math.min(levelNumber - 2, Math.floor(levelNumber * 0.55)))
+          : Math.max(1, Math.min(levelNumber - 2, Math.floor(levelNumber * 0.42)));
+        const firstHalfIndex = Math.max(1, Math.min(levelNumber - 3, Math.floor(levelNumber * 0.30)));
+        const secondHalfIndex = Math.max(firstHalfIndex + 3, Math.min(levelNumber - 2, Math.floor(levelNumber * 0.70)));
+        const protectedObstacleIndices = obstacleKinds.length > 1
+          ? new Set([firstHalfIndex, secondHalfIndex])
+          : new Set([oneObstacleIndex]);
+
+        for (let i = 0; i < levelNumber; i++) {
+          const y = pathY[i];
+          const len = getBiblePlatformLength(levelNumber + tuning.lenOffset, i);
+          const gap = getBibleGap(levelNumber + tuning.gapOffset, i);
+          const x1 = cursor;
+          const x2 = x1 + len;
+          createPlatform(x1, y, x2);
+          mainRecords.push({ x1, x2, y, index: i, style });
+
+          const tierA = getBibleTierStep(levelNumber, i, tuning.shelfPattern);
+          const tierB = getBibleTierStep(levelNumber, i, tuning.shelfPattern + 1);
+          const shelfLen = 2.4 + ((levelNumber + i + tuning.shelfPattern) % 4) * 0.55;
+          const highShelfLen = 2.2 + ((levelNumber + i * 2 + tuning.shelfPattern) % 3) * 0.50;
+          const leftShelf = (i + tuning.shelfPattern) % 2 === 0;
+          const shelfShift = leftShelf ? 0.45 : Math.max(0.25, len - shelfLen - 0.45);
+          const shelfX1 = x1 + shelfShift;
+          const shelfX2 = shelfX1 + shelfLen;
+          const shelfY = y + tierA;
+          createPlatform(shelfX1, shelfY, shelfX2);
+          shelfRecords.push({ x1: shelfX1, x2: shelfX2, y: shelfY, index: i, style });
+
+          const highAllowed = (i + levelNumber + tuning.shelfPattern) % 3 !== 0;
+          if (highAllowed) {
+            const centered = (tuning.shelfPattern + i) % 4 === 0;
+            const highX1 = centered ? x1 + Math.max(0.15, len * 0.5 - highShelfLen * 0.5) : x1 + (leftShelf ? Math.max(0.2, len - highShelfLen - 0.35) : 0.35);
+            const highX2 = highX1 + highShelfLen;
+            const highY = shelfY + tierB;
+            createPlatform(highX1, highY, highX2);
+            shelfRecords.push({ x1: highX1, x2: highX2, y: highY, index: i, high: true, style });
+          }
+
+          const potionShelf = shelfRecords[shelfRecords.length - 1];
+          createPotion((potionShelf.x1 + potionShelf.x2) * 0.5, potionShelf.y);
+
+          const spikeWouldConflictWithDynamicObstacle = protectedObstacleIndices.has(i);
+          if (i % 5 === 2 && !spikeWouldConflictWithDynamicObstacle) {
+            createSpike(x1 + Math.min(len - 1.2, 1.05 + ((i + tuning.gapOffset) % 3) * 0.8), y + 0.05);
+          }
+
+          const enemyMode = (i + levelNumber + tuning.enemyBias) % 5;
+          const enemySurface = enemyMode === 0 || enemyMode === 3 ? shelfRecords[shelfRecords.length - 1] : mainRecords[mainRecords.length - 1];
+          const enemyX = Math.max(enemySurface.x1 + 0.8, Math.min(enemySurface.x2 - 0.8, (enemySurface.x1 + enemySurface.x2) * 0.5 + (((i + tuning.enemyBias) % 3) - 1) * 0.45));
+          createEnemy(enemyX, enemySurface.y);
+
+          if (i === stairIndex && i < levelNumber - 1) {
+            const dy = pathY[i + 1] - y;
+            if (dy > 0) {
+              const stepH = dy >= 2.8 ? 0.35 : 0.22;
+              const steps = Math.max(4, Math.min(20, Math.round(dy / stepH)));
+              const exactStepH = dy / steps;
+              const stepW = dy >= 2.8 ? 0.35 : 0.42;
+              createStaircase(x2, y, steps, stepW, exactStepH, 1);
+              cursor = x2 + steps * stepW;
+            } else {
+              cursor = x2 + gap;
+            }
+          } else {
+            cursor = x2 + gap;
+          }
+        }
+
+        const secondTierRecord = shelfRecords.find(r => r.index >= secondHalfIndex && r.index <= Math.min(levelNumber - 1, secondHalfIndex + 2)) || mainRecords[secondHalfIndex];
+        const placements = obstacleKinds.length > 1
+          ? [mainRecords[firstHalfIndex], secondTierRecord]
+          : [mainRecords[oneObstacleIndex]];
+
+        obstacleKinds.forEach((kind, idx) => {
+          const rec = placements[idx] || placements[0] || mainRecords[0];
+          const ox = Math.max(rec.x1 + 1.15, Math.min(rec.x2 - 1.15, (rec.x1 + rec.x2) * 0.5));
+          placeBibleObstacle(kind, ox, rec.y, Math.min(5.0, Math.max(3.0, rec.x2 - rec.x1 - 0.5)));
+        });
+
+        const last = mainRecords[mainRecords.length - 1];
+        createDoor((last.x1 + last.x2) * 0.5, last.y + 0.8, true);
       }
 
       function drawEnemy(e) {
@@ -1975,7 +2001,6 @@ html, body {
           start: { x: -7, y: 0 },
           exit: { x: 11.5, y: 0.8 },
           build() {
-            // Level 1: original easy intro world.
             createPlatform(-8, 0, -1); createPlatform(1, 0, 5); createPlatform(7, 0, 12);
             createPlatform(-4, 2.5, -1); createPlatform(3, 3.5, 6); createPlatform(9, 2, 11);
             createSpike(5.5, 0.05);
@@ -1988,38 +2013,30 @@ html, body {
           start: { x: -7, y: 0 },
           exit: { x: 23, y: 0.8 },
           build() {
-            // Level 2: reference-image layout.
-            // Long side-scrolling structure with a low start, two stair climbs, shelf combat, two spike pits, floating circle pickups, and a final exit door.
 
-            // Left start door and broken low floor.
             createPlatform(-8, 0, -5.0);
             createPlatform(-4.0, -0.45, -2.0);
             createPlatform(-1.1, 0, 1.2);
             createDoor(-7, 0.8, false);
 
-            // First floating pickup shelf.
             createPlatform(-0.6, 1.55, 3.2);
             createPotion(-2.7, 0);
             createPotion(0.9, 1.55);
 
-            // Stair climb to first combat shelf.
             createStaircase(1.2, 0, 14, 0.50, 0.1464285714, 1);
             createPlatform(8.2, 2.05, 12.8);
             createEnemy(9.0, 2.05);
             createPotion(10.2, 2.05);
             createEnemy(11.4, 2.05);
 
-            // First spike pit and middle shelf.
             createSpike(13.0, 0.05);
             createPlatform(15.4, 2.05, 18.0);
             createPotion(17.1, 2.05);
 
-            // Second staircase to high shelf.
             createStaircase(18.0, 2.05, 11, 0.48, 0.24, 1);
             createPlatform(23.28, 4.70, 26.2);
             createPotion(25.0, 4.70);
 
-            // Final drop, second spike pit, and exit door platform.
             createSpike(26.4, 0.05);
             createPlatform(28.3, 0, 32.0);
             createDoor(30.0, 0.8, true);
@@ -2030,12 +2047,7 @@ html, body {
           start: { x: -7, y: 0 },
           exit: { x: 59.2, y: 5.0 },
           build() {
-            // Level 3: Three Shrine Ascent.
-            // Purpose: longer than Level 2 through three distinct tier-floor structures,
-            // not by extending one long line. Each structure contains a ground line,
-            // 1-tier, 2-tier, and 3-tier platform for jumping/exploration.
 
-            // Structure 1: Broken start climb. Pure jumping route.
             createPlatform(-8, 0, -2.0);          // ground floor A1
             createPlatform(0.0, 0, 8.0);          // ground floor A2 after first real gap
             createPlatform(-1.0, 1.45, 3.2);      // 1-tier
@@ -2049,7 +2061,6 @@ html, body {
             createEnemy(1.8, 1.45);
             createSpike(6.6, 0.05);
 
-            // Structure 2: Lower gallery into stair climb. Different rhythm from Structure 1.
             createPlatform(13.0, 0, 26.0);        // ground floor
             createPlatform(16.5, 1.40, 21.8);     // 1-tier
             createPlatform(23.2, 2.80, 27.2);     // 2-tier
@@ -2060,7 +2071,6 @@ html, body {
             createEnemy(18.8, 1.40);
             createStaircase(26.0, 0, 12, 0.25, 0.35, 1); // connects exactly to x 29.0, y 4.20
 
-            // Structure 3: Final moon shelf. Second staircase and final combat shelf.
             createPlatform(36.0, 0, 48.0);        // ground floor
             createPlatform(39.4, 1.40, 44.2);     // 1-tier
             createPlatform(46.8, 2.80, 52.0);     // 2-tier
@@ -2078,260 +2088,137 @@ html, body {
         {
           name: 'Level 4',
           start: { x: -7, y: 0 },
-          exit: { x: 90.4, y: 5.55 },
+          exit: { x: 0, y: 0 },
           build() {
-            // Level 4: Broken Quarry Gate. Four distinct tier/floor structures, four enemies, one falling boulder trap.
-            createDoor(-7, 0.8, false);
-
-            // Structure 1: cracked ground and first climb.
-            createPlatform(-8, 0, -3.4);
-            createPlatform(-1.0, 0, 7.0);
-            createPlatform(1.2, 1.35, 5.6);
-            createPlatform(6.8, 2.70, 11.0);
-            createPlatform(12.0, 4.05, 16.2);
-            createPotion(2.2, 1.35);
-            createPotion(8.8, 2.70);
-            createEnemy(4.4, 1.35);
-            createSpike(5.8, 0.05);
-            createFallingBoulder(1.0, 0, 3.0, 6.6);
-
-            // Structure 2: basin to connected stair shelf.
-            createPlatform(18.0, 0, 27.0);
-            createPlatform(20.2, 1.35, 25.3);
-            createPlatform(29.8, 2.85, 35.0);
-            createPlatform(38.0, 4.35, 43.4);
-            createPotion(21.0, 1.35);
-            createPotion(33.4, 2.85);
-            createEnemy(31.8, 2.85);
-            createStaircase(27.0, 0, 12, 0.25, 0.2375, 1); // ends x 30.0, y 2.85
-            createStaircase(35.0, 2.85, 12, 0.25, 0.125, 1); // ends x 38.0, y 4.35
-
-            // Structure 3: mid-air shelves with exploration ring.
-            createPlatform(46.0, 0, 54.0);
-            createPlatform(48.0, 1.50, 53.6);
-            createPlatform(56.6, 3.00, 62.4);
-            createPlatform(64.8, 4.60, 70.2);
-            createPotion(51.2, 1.50);
-            createPotion(59.2, 3.00);
-            createEnemy(66.8, 4.60);
-            createSpike(60.2, 3.05);
-
-            // Structure 4: final tower switchback.
-            createPlatform(73.0, 0, 81.0);
-            createPlatform(76.0, 1.50, 83.0);
-            createPlatform(84.5, 3.05, 89.5);
-            createPlatform(90.0, 4.75, 94.5);
-            createPotion(78.2, 1.50);
-            createPotion(92.8, 4.75);
-            createEnemy(79.0, 1.50);
-            createStaircase(81.0, 0, 14, 0.25, 0.2178571429, 1); // ends x 84.5, y 3.05
-            createDoor(90.4, 5.55, true);
+            buildBibleLevel(4, ['risingSpikes']);
           }
         },
         {
           name: 'Level 5',
           start: { x: -7, y: 0 },
-          exit: { x: 119.8, y: 6.55 },
+          exit: { x: 0, y: 0 },
           build() {
-            // Level 5: Pendulum Hall. Five structures, five enemies, one swinging axe pendulum.
-            createDoor(-7, 0.8, false);
-
-            // Structure 1: split opener.
-            createPlatform(-8, 0, -3.2);
-            createPlatform(-0.8, 0, 6.6);
-            createPlatform(0.8, 1.35, 5.0);
-            createPlatform(7.2, 2.80, 12.0);
-            createPlatform(13.8, 4.15, 18.2);
-            createPotion(2.0, 1.35);
-            createPotion(10.2, 2.80);
-            createEnemy(4.1, 1.35);
-            createSpike(5.3, 0.05);
-
-            // Structure 2: pendulum bridge.
-            createPlatform(21.0, 0, 29.0);
-            createPlatform(23.0, 1.45, 28.4);
-            createPlatform(31.0, 3.00, 39.0);
-            createPlatform(41.5, 4.60, 47.0);
-            createPotion(24.0, 1.45);
-            createPotion(37.0, 3.00);
-            createEnemy(34.2, 3.00);
-            createSwingingAxe(35.0, 5.55, 2.05, 0.70, 0.046);
-            createStaircase(29.0, 0, 8, 0.25, 0.375, 1); // ends x 31.0, y 3.00
-
-            // Structure 3: staggered upper climb.
-            createPlatform(50.0, 0, 58.0);
-            createPlatform(52.4, 1.60, 57.8);
-            createPlatform(61.2, 3.15, 67.0);
-            createPlatform(70.0, 4.90, 76.2);
-            createPotion(54.0, 1.60);
-            createPotion(64.0, 3.15);
-            createEnemy(72.8, 4.90);
-            createSpike(63.2, 3.20);
-
-            // Structure 4: stair shaft.
-            createPlatform(79.0, 0, 87.0);
-            createPlatform(82.0, 1.55, 89.0);
-            createPlatform(91.0, 3.20, 98.0);
-            createPlatform(100.0, 5.05, 106.0);
-            createPotion(84.5, 1.55);
-            createPotion(94.0, 3.20);
-            createEnemy(93.5, 3.20);
-            createStaircase(87.0, 0, 16, 0.25, 0.20, 1); // ends x 91.0, y 3.20
-            createStaircase(98.0, 3.20, 8, 0.25, 0.23125, 1); // ends x 100.0, y 5.05
-
-            // Structure 5: final pendulum exit shelves.
-            createPlatform(109.0, 0, 116.0);
-            createPlatform(111.0, 1.75, 116.8);
-            createPlatform(119.0, 3.45, 124.8);
-            createPlatform(117.4, 5.75, 123.6);
-            createPotion(112.8, 1.75);
-            createPotion(121.0, 5.75);
-            createEnemy(113.8, 1.75);
-            createDoor(119.8, 6.55, true);
+            buildBibleLevel(5, ['pulseLaser']);
           }
         },
         {
           name: 'Level 6',
           start: { x: -7, y: 0 },
-          exit: { x: 151.8, y: 7.55 },
+          exit: { x: 0, y: 0 },
           build() {
-            // Level 6: Sawline Ascent. Six structures, six enemies, one horizontal saw blade rail.
-            createDoor(-7, 0.8, false);
-
-            // Structure 1: narrow broken approach.
-            createPlatform(-8, 0, -3.5);
-            createPlatform(-0.8, 0, 7.0);
-            createPlatform(1.2, 1.45, 5.8);
-            createPlatform(8.0, 2.90, 13.0);
-            createPlatform(15.0, 4.35, 20.0);
-            createPotion(2.4, 1.45);
-            createPotion(10.6, 2.90);
-            createEnemy(4.2, 1.45);
-            createSpike(5.8, 0.05);
-
-            // Structure 2: saw rail under the shelf.
-            createPlatform(23.0, 0, 31.0);
-            createPlatform(25.0, 1.60, 31.0);
-            createPlatform(33.0, 3.25, 41.0);
-            createPlatform(44.0, 4.95, 50.0);
-            createPotion(26.2, 1.60);
-            createPotion(38.4, 3.25);
-            createEnemy(36.0, 3.25);
-            createSawBlade(34.2, 39.8, 3.72, 0.052);
-            createStaircase(31.0, 0, 8, 0.25, 0.40625, 1); // ends x 33.0, y 3.25
-
-            // Structure 3: floating shelves.
-            createPlatform(53.0, 0, 61.0);
-            createPlatform(55.5, 1.70, 61.5);
-            createPlatform(64.0, 3.35, 70.2);
-            createPlatform(73.0, 5.10, 79.4);
-            createPotion(57.2, 1.70);
-            createPotion(67.0, 3.35);
-            createPotion(76.2, 5.10);
-            createEnemy(74.8, 5.10);
-            createSpike(66.2, 3.40);
-
-            // Structure 4: double stair shelf.
-            createPlatform(82.0, 0, 90.0);
-            createPlatform(84.5, 1.75, 91.2);
-            createPlatform(94.0, 3.55, 101.0);
-            createPlatform(104.0, 5.45, 111.0);
-            createPotion(86.4, 1.75);
-            createPotion(98.0, 3.55);
-            createEnemy(97.0, 3.55);
-            createStaircase(90.0, 0, 16, 0.25, 0.221875, 1); // ends x 94.0, y 3.55
-            createStaircase(101.0, 3.55, 12, 0.25, 0.1583333333, 1); // ends x 104.0, y 5.45
-
-            // Structure 5: high broken gallery.
-            createPlatform(114.0, 0, 122.0);
-            createPlatform(116.5, 1.90, 123.0);
-            createPlatform(126.0, 3.75, 133.0);
-            createPlatform(136.0, 5.80, 143.0);
-            createPotion(118.8, 1.90);
-            createPotion(130.0, 3.75);
-            createEnemy(128.6, 3.75);
-            createEnemy(139.0, 5.80);
-            createSpike(121.0, 0.05);
-
-            // Structure 6: final crown shelf.
-            createPlatform(146.0, 0, 153.0);
-            createPlatform(148.0, 2.05, 155.2);
-            createPlatform(157.5, 4.05, 164.0);
-            createPlatform(149.0, 6.75, 156.2);
-            createPotion(150.0, 2.05);
-            createPotion(154.0, 6.75);
-            createDoor(151.8, 7.55, true);
+            buildBibleLevel(6, ['rotatingMace']);
           }
-
         },
         {
           name: 'Level 7',
           start: { x: -7, y: 0 },
-          exit: { x: 180.8, y: 8.1 },
+          exit: { x: 0, y: 0 },
           build() {
-            // Level 7: Rolling Log Causeway. Seven structures, seven enemies, one rolling spiked log.
-            createDoor(-7, 0.8, false);
-            createPlatform(-8, 0, -3.5); createPlatform(-0.8, 0, 7.0); createPlatform(1.2, 1.45, 5.8); createPlatform(8.0, 2.9, 13.0); createPlatform(15.0, 4.35, 20.0); createPotion(2.4, 1.45); createPotion(10.5, 2.9); createEnemy(4.0, 1.45); createSpike(5.8, 0.05);
-            createPlatform(23.0, 0, 31.0); createPlatform(25.0, 1.55, 30.5); createPlatform(33.0, 3.10, 40.0); createPlatform(43.0, 4.85, 49.0); createPotion(26.0, 1.55); createPotion(37.0, 3.10); createEnemy(35.4, 3.10); createRollingSpikedLog(34.4, 39.0, 3.10, 0.045); createStaircase(31.0, 0, 8, 0.25, 0.3875, 1);
-            createPlatform(52.0, 0, 60.0); createPlatform(54.5, 1.65, 60.8); createPlatform(63.0, 3.25, 69.2); createPlatform(72.5, 5.00, 79.0); createPotion(56.4, 1.65); createPotion(66.2, 3.25); createEnemy(74.0, 5.00); createSpike(65.2, 3.30);
-            createPlatform(82.0, 0, 90.0); createPlatform(84.8, 1.80, 91.0); createPlatform(94.0, 3.55, 101.0); createPlatform(104.0, 5.35, 111.0); createPotion(86.8, 1.80); createPotion(98.0, 3.55); createEnemy(96.8, 3.55); createStaircase(90.0, 0, 16, 0.25, 0.221875, 1); createStaircase(101.0, 3.55, 12, 0.25, 0.15, 1);
-            createPlatform(114.0, 0, 122.0); createPlatform(116.5, 1.90, 123.4); createPlatform(126.0, 3.85, 133.0); createPlatform(136.0, 5.85, 143.0); createPotion(118.8, 1.90); createPotion(130.0, 3.85); createEnemy(128.8, 3.85); createEnemy(139.4, 5.85); createSpike(121.0, 0.05);
-            createPlatform(146.0, 0, 154.0); createPlatform(148.4, 2.00, 155.0); createPlatform(158.0, 4.05, 165.0); createPlatform(168.0, 6.15, 175.0); createPotion(150.3, 2.00); createPotion(161.5, 4.05); createEnemy(160.0, 4.05); createStaircase(154.0, 0, 16, 0.25, 0.253125, 1);
-            createPlatform(178.0, 0, 185.0); createPlatform(180.0, 2.10, 187.0); createPlatform(189.5, 4.25, 196.0); createPlatform(179.0, 7.30, 185.8); createPotion(182.0, 2.10); createPotion(183.6, 7.30); createEnemy(182.2, 7.30); createDoor(180.8, 8.1, true);
+            buildBibleLevel(7, ['stomper']);
           }
         },
         {
           name: 'Level 8',
           start: { x: -7, y: 0 },
-          exit: { x: 213.0, y: 8.7 },
+          exit: { x: 0, y: 0 },
           build() {
-            // Level 8: Crushing Wall Gallery. Eight structures, eight enemies, timed crushing gate.
-            createDoor(-7, 0.8, false);
-            createPlatform(-8, 0, -3.5); createPlatform(-0.8, 0, 7.0); createPlatform(1.0, 1.45, 5.8); createPlatform(8.0, 3.0, 13.4); createPlatform(16.0, 4.55, 21.0); createPotion(2.4, 1.45); createEnemy(4.0, 1.45); createSpike(5.8, 0.05);
-            createPlatform(24.0, 0, 32.0); createPlatform(26.4, 1.6, 32.2); createPlatform(35.0, 3.25, 42.0); createPlatform(45.0, 5.05, 51.0); createPotion(28.0, 1.6); createPotion(39.0, 3.25); createEnemy(37.0, 3.25); createCrushingWallTrap(38.4, 3.25, 3.1); createStaircase(32.0, 0, 12, 0.25, 0.2708333333, 1);
-            createPlatform(54.0, 0, 62.0); createPlatform(56.8, 1.75, 63.0); createPlatform(66.0, 3.45, 72.8); createPlatform(76.0, 5.25, 83.0); createPotion(58.8, 1.75); createPotion(69.2, 3.45); createEnemy(78.0, 5.25); createSpike(68.5, 3.50);
-            createPlatform(86.0, 0, 94.0); createPlatform(88.8, 1.9, 95.4); createPlatform(98.0, 3.75, 105.5); createPlatform(109.0, 5.60, 116.0); createPotion(91.0, 1.9); createPotion(102.0, 3.75); createEnemy(101.0, 3.75); createStaircase(94.0, 0, 16, 0.25, 0.234375, 1); createStaircase(105.5, 3.75, 14, 0.25, 0.1321428571, 1);
-            createPlatform(119.0, 0, 127.0); createPlatform(121.6, 2.0, 128.2); createPlatform(131.0, 4.0, 138.4); createPlatform(142.0, 5.95, 149.0); createPotion(123.8, 2.0); createPotion(134.4, 4.0); createEnemy(133.2, 4.0); createEnemy(144.0, 5.95);
-            createPlatform(152.0, 0, 160.0); createPlatform(154.5, 2.10, 161.5); createPlatform(164.0, 4.20, 171.0); createPlatform(174.0, 6.25, 181.0); createPotion(156.6, 2.10); createPotion(167.5, 4.20); createEnemy(166.0, 4.20); createStaircase(160.0, 0, 16, 0.25, 0.2625, 1);
-            createPlatform(184.0, 0, 192.0); createPlatform(186.5, 2.20, 193.5); createPlatform(196.5, 4.45, 203.0); createPlatform(206.0, 6.60, 213.0); createPotion(188.8, 2.20); createPotion(209.0, 6.60); createEnemy(199.0, 4.45); createEnemy(208.8, 6.60); createSpike(190.6, 0.05);
-            createPlatform(216.0, 0, 223.0); createPlatform(218.5, 2.35, 225.2); createPlatform(228.0, 4.70, 234.5); createPlatform(211.0, 7.90, 217.0); createPotion(220.6, 2.35); createPotion(214.0, 7.90); createEnemy(213.4, 7.90); createDoor(213.0, 8.7, true);
+            buildBibleLevel(8, ['daggerRing']);
           }
         },
         {
           name: 'Level 9',
           start: { x: -7, y: 0 },
-          exit: { x: 246.5, y: 9.2 },
+          exit: { x: 0, y: 0 },
           build() {
-            // Level 9: Wind Spine. Nine structures, nine enemies, alternating wind emitter.
-            createDoor(-7, 0.8, false);
-            createPlatform(-8, 0, -3.5); createPlatform(-0.8, 0, 7.0); createPlatform(1.2, 1.5, 6.0); createPlatform(8.4, 3.05, 14.0); createPlatform(17.0, 4.70, 22.0); createPotion(2.6, 1.5); createEnemy(4.2, 1.5); createSpike(5.8, 0.05);
-            createPlatform(25.0, 0, 33.0); createPlatform(27.6, 1.65, 33.5); createPlatform(36.0, 3.35, 43.0); createPlatform(46.5, 5.15, 53.0); createPotion(29.8, 1.65); createPotion(39.5, 3.35); createEnemy(38.2, 3.35); createWindGustEmitter(36.0, 43.0, 3.35, 0.034); createStaircase(33.0, 0, 12, 0.25, 0.2791666667, 1);
-            createPlatform(56.0, 0, 64.0); createPlatform(58.8, 1.8, 65.4); createPlatform(68.0, 3.6, 75.0); createPlatform(79.0, 5.45, 86.0); createPotion(61.0, 1.8); createPotion(71.4, 3.6); createEnemy(81.2, 5.45); createSpike(70.5, 3.65);
-            createPlatform(89.0, 0, 97.0); createPlatform(91.8, 1.95, 98.8); createPlatform(101.5, 3.90, 109.0); createPlatform(113.0, 5.85, 120.0); createPotion(94.0, 1.95); createPotion(105.8, 3.90); createEnemy(104.0, 3.90); createStaircase(97.0, 0, 18, 0.25, 0.2166666667, 1);
-            createPlatform(123.0, 0, 131.0); createPlatform(125.8, 2.05, 133.0); createPlatform(136.0, 4.15, 143.0); createPlatform(147.0, 6.25, 154.0); createPotion(128.0, 2.05); createPotion(139.5, 4.15); createEnemy(138.2, 4.15); createEnemy(149.2, 6.25); createSpike(129.5, 0.05);
-            createPlatform(157.0, 0, 165.0); createPlatform(159.8, 2.20, 167.0); createPlatform(170.0, 4.40, 177.0); createPlatform(181.0, 6.60, 188.0); createPotion(162.0, 2.20); createPotion(173.5, 4.40); createEnemy(172.2, 4.40); createStaircase(165.0, 0, 20, 0.25, 0.22, 1);
-            createPlatform(191.0, 0, 199.0); createPlatform(193.5, 2.35, 201.0); createPlatform(204.0, 4.70, 211.0); createPlatform(215.0, 6.95, 222.0); createPotion(196.0, 2.35); createPotion(218.0, 6.95); createEnemy(206.4, 4.70); createEnemy(217.8, 6.95);
-            createPlatform(225.0, 0, 233.0); createPlatform(227.5, 2.50, 235.0); createPlatform(238.0, 5.00, 245.0); createPlatform(249.0, 7.35, 256.0); createPotion(230.0, 2.50); createPotion(252.0, 7.35); createEnemy(240.8, 5.00); createSpike(231.5, 0.05);
-            createPlatform(259.0, 0, 266.0); createPlatform(261.0, 2.65, 268.0); createPlatform(270.8, 5.30, 277.2); createPlatform(244.8, 8.40, 251.8); createPotion(263.0, 2.65); createPotion(248.0, 8.40); createEnemy(247.0, 8.40); createDoor(246.5, 9.2, true);
+            buildBibleLevel(9, ['bouncingOrb']);
           }
         },
         {
           name: 'Level 10',
           start: { x: -7, y: 0 },
-          exit: { x: 279.5, y: 9.8 },
+          exit: { x: 0, y: 0 },
           build() {
-            // Level 10: Spear Moon Gate. Ten structures, ten enemies, charging spear turret.
-            createDoor(-7, 0.8, false);
-            createPlatform(-8, 0, -3.5); createPlatform(-0.8, 0, 7.0); createPlatform(1.2, 1.55, 6.0); createPlatform(8.5, 3.15, 14.5); createPlatform(17.5, 4.85, 23.0); createPotion(2.8, 1.55); createEnemy(4.4, 1.55); createSpike(5.8, 0.05);
-            createPlatform(26.0, 0, 34.0); createPlatform(28.8, 1.70, 35.0); createPlatform(38.0, 3.45, 45.0); createPlatform(49.0, 5.25, 56.0); createPotion(31.0, 1.70); createPotion(41.5, 3.45); createEnemy(40.0, 3.45); createSpearTurret(54.8, 5.25, -1); createStaircase(34.0, 0, 16, 0.25, 0.215625, 1);
-            createPlatform(59.0, 0, 67.0); createPlatform(61.8, 1.85, 68.4); createPlatform(71.0, 3.70, 78.0); createPlatform(82.0, 5.55, 89.0); createPotion(64.0, 1.85); createPotion(74.5, 3.70); createEnemy(84.0, 5.55); createSpike(73.0, 3.75);
-            createPlatform(92.0, 0, 100.0); createPlatform(94.8, 2.00, 102.0); createPlatform(105.0, 4.00, 112.5); createPlatform(116.5, 5.95, 124.0); createPotion(97.0, 2.00); createPotion(109.0, 4.00); createEnemy(108.0, 4.00); createStaircase(100.0, 0, 20, 0.25, 0.20, 1);
-            createPlatform(127.0, 0, 135.0); createPlatform(129.8, 2.15, 137.4); createPlatform(140.0, 4.30, 147.0); createPlatform(151.0, 6.35, 158.0); createPotion(132.0, 2.15); createPotion(143.5, 4.30); createEnemy(142.2, 4.30); createEnemy(153.2, 6.35); createSpike(133.5, 0.05);
-            createPlatform(161.0, 0, 169.0); createPlatform(163.8, 2.30, 171.0); createPlatform(174.0, 4.60, 181.0); createPlatform(185.0, 6.80, 192.0); createPotion(166.0, 2.30); createPotion(177.5, 4.60); createEnemy(176.2, 4.60); createStaircase(169.0, 0, 20, 0.25, 0.23, 1);
-            createPlatform(195.0, 0, 203.0); createPlatform(197.8, 2.45, 205.0); createPlatform(208.0, 4.90, 215.0); createPlatform(219.0, 7.15, 226.0); createPotion(200.0, 2.45); createPotion(222.0, 7.15); createEnemy(210.5, 4.90); createEnemy(221.8, 7.15);
-            createPlatform(229.0, 0, 237.0); createPlatform(231.8, 2.60, 239.0); createPlatform(242.0, 5.20, 249.0); createPlatform(253.0, 7.55, 260.0); createPotion(234.0, 2.60); createPotion(256.0, 7.55); createEnemy(244.5, 5.20); createSpike(235.5, 0.05);
-            createPlatform(263.0, 0, 271.0); createPlatform(265.6, 2.75, 273.0); createPlatform(276.0, 5.55, 283.0); createPlatform(287.0, 8.00, 294.0); createPotion(268.0, 2.75); createPotion(290.0, 8.00); createEnemy(278.5, 5.55); createStaircase(271.0, 0, 20, 0.25, 0.2775, 1);
-            createPlatform(297.0, 0, 305.0); createPlatform(299.5, 2.90, 307.0); createPlatform(310.0, 5.85, 317.0); createPlatform(277.5, 9.00, 284.5); createPotion(302.0, 2.90); createPotion(281.0, 9.00); createEnemy(280.0, 9.00); createDoor(279.5, 9.8, true);
+            buildBibleLevel(10, ['ceilingNeedles']);
+          }
+        },
+        {
+          name: 'Level 11',
+          start: { x: -7, y: 0 },
+          exit: { x: 0, y: 0 },
+          build() {
+            buildBibleLevel(11, ['slidingBladeGate']);
+          }
+        },
+        {
+          name: 'Level 12',
+          start: { x: -7, y: 0 },
+          exit: { x: 0, y: 0 },
+          build() {
+            buildBibleLevel(12, ['shadowSlash']);
+          }
+        },
+        {
+          name: 'Level 13',
+          start: { x: -7, y: 0 },
+          exit: { x: 0, y: 0 },
+          build() {
+            buildBibleLevel(13, ['windmillBlades']);
+          }
+        },
+        {
+          name: 'Level 14',
+          start: { x: -7, y: 0 },
+          exit: { x: 0, y: 0 },
+          build() {
+            buildBibleLevel(14, ['crossZap']);
+          }
+        },
+        {
+          name: 'Level 15',
+          start: { x: -7, y: 0 },
+          exit: { x: 0, y: 0 },
+          build() {
+            buildBibleLevel(15, ['risingSpikes', 'shadowSlash']);
+          }
+        },
+        {
+          name: 'Level 16',
+          start: { x: -7, y: 0 },
+          exit: { x: 0, y: 0 },
+          build() {
+            buildBibleLevel(16, ['pulseLaser', 'windmillBlades']);
+          }
+        },
+        {
+          name: 'Level 17',
+          start: { x: -7, y: 0 },
+          exit: { x: 0, y: 0 },
+          build() {
+            buildBibleLevel(17, ['rotatingMace', 'slidingBladeGate']);
+          }
+        },
+        {
+          name: 'Level 18',
+          start: { x: -7, y: 0 },
+          exit: { x: 0, y: 0 },
+          build() {
+            buildBibleLevel(18, ['stomper', 'bouncingOrb']);
+          }
+        },
+        {
+          name: 'Level 19',
+          start: { x: -7, y: 0 },
+          exit: { x: 0, y: 0 },
+          build() {
+            buildBibleLevel(19, ['daggerRing', 'ceilingNeedles']);
+          }
+        },
+        {
+          name: 'Level 20',
+          start: { x: -7, y: 0 },
+          exit: { x: 0, y: 0 },
+          build() {
+            buildBibleLevel(20, ['crossZap', 'windmillBlades']);
           }
         }
 
@@ -2350,13 +2237,7 @@ html, body {
           if (e.bubbleTimeout) clearTimeout(e.bubbleTimeout);
           disposeObjectTree(e.group);
         });
-        boulders.forEach(o => disposeObjectTree(o.group));
-        swingingAxes.forEach(o => disposeObjectTree(o.group));
-        sawBlades.forEach(o => disposeObjectTree(o.group));
-        rollingLogs.forEach(o => disposeObjectTree(o.group));
-        crushingWalls.forEach(o => disposeObjectTree(o.group));
-        windEmitters.forEach(o => disposeObjectTree(o.group));
-        spearTurrets.forEach(o => { o.projectiles.forEach(p => disposeObjectTree(p.group)); disposeObjectTree(o.group); });
+        advancedObstacles.forEach(o => disposeObjectTree(o.group));
         platforms.length = 0;
         stairs.length = 0;
         levelDecor.length = 0;
@@ -2364,13 +2245,7 @@ html, body {
         potions.length = 0;
         doors.length = 0;
         enemies.length = 0;
-        boulders.length = 0;
-        swingingAxes.length = 0;
-        sawBlades.length = 0;
-        rollingLogs.length = 0;
-        crushingWalls.length = 0;
-        windEmitters.length = 0;
-        spearTurrets.length = 0;
+        advancedObstacles.length = 0;
       }
 
       function clearGameplayInputs() {
@@ -2458,8 +2333,6 @@ html, body {
         onGround = true;
       }
       function stairYAt(stair, x) {
-        // Interpolate along the actual authored stair direction.
-        // This works for every level and for both ascending-right and ascending-left stairs.
         const startX = Number.isFinite(stair.startX) ? stair.startX : stair.x1;
         const endX = Number.isFinite(stair.endX) ? stair.endX : stair.x2;
         const startY = Number.isFinite(stair.startY) ? stair.startY : stair.y1;
@@ -2478,9 +2351,6 @@ html, body {
         const stairEdgeTol = 0.46;
         const stairTol = 1.05;
 
-        // Stairs are continuous hidden ramps under one visible pencil stair line.
-        // They are checked first so the player snaps to the stair instead of dropping
-        // between visual steps or before/after a stair endpoint.
         for (const stair of stairs) {
           const minX = Math.min(stair.x1, stair.x2);
           const maxX = Math.max(stair.x1, stair.x2);
@@ -2499,8 +2369,6 @@ html, body {
           }
         }
 
-        // Platform/tier/floor collision: each visible line is a rigid walkable segment.
-        // Gaps stay empty because collision is limited to explicit platform segments.
         for (const p of platforms) {
           const a = Math.min(p.x1, p.x2);
           const b = Math.max(p.x1, p.x2);
@@ -2683,17 +2551,10 @@ html, body {
         const playerSurface = findAttackSurfaceAt(playerX, playerFeetY, onGround ? 0.78 : 1.55);
         const enemySurface = findAttackSurfaceAt(enemyX, enemy.y, 0.82);
 
-        // Same-column shelves count as connected only when the current floor and
-        // enemy floor overlap on the X axis. This prevents sword hits through an
-        // empty horizontal gap while still allowing close vertical tier combat.
         if (playerSurface && enemySurface && surfacesOverlapInX(playerSurface, enemySurface, 0.22)) return true;
 
-        // Stairs are authored as solid walkable ramps, so a stair connection keeps
-        // upward attacks valid even when the player is standing on or beside the stair.
         if (stairConnectsAttackPath(playerSurface, enemySurface, playerX, enemyX)) return true;
 
-        // If the player is airborne, allow upward hit only when both characters are
-        // still inside the same visible solid X range. Do not allow cross-gap hits.
         if (!playerSurface && enemySurface && playerX >= enemySurface.x1 - 0.22 && playerX <= enemySurface.x2 + 0.22) return true;
 
         return false;
@@ -2964,6 +2825,145 @@ html, body {
       function buyHealth() { if (wallet >= 10 && hp < maxHp && !gameOver) { playSfx('buy'); wallet -= 10; hp++; burst(playerGroup.position.x, playerGroup.position.y + 1.08, 7); spawnText('+HP', playerGroup.position.x, playerGroup.position.y + 1.38); updateUI(); } }
       function startGame() { unlockAudio(); playSfx('start'); startMusic(); restartGame(); }
 
+      function setupHiddenLevelCheat() {
+        const walletEl = $('walletDisplay');
+        const panel = $('cheatLevelPanel');
+        const grid = $('cheatLevelGrid');
+        const closeBtn = $('cheatCloseButton');
+        if (!walletEl || !panel || !grid || !closeBtn) return;
+
+        const requiredSequence = ['up', 'up', 'down', 'down'];
+        const state = {
+          walletTouchId: null,
+          swipeTouchId: null,
+          startX: 0,
+          startY: 0,
+          sequenceIndex: 0,
+          timeoutId: null,
+          active: false
+        };
+
+        const normalGameplayActive = () => !introActive && !gameOver && !levelBannerActive;
+
+        const resetSequence = () => {
+          state.walletTouchId = null;
+          state.swipeTouchId = null;
+          state.sequenceIndex = 0;
+          state.active = false;
+          if (state.timeoutId) clearTimeout(state.timeoutId);
+          state.timeoutId = null;
+        };
+
+        const armTimeout = () => {
+          if (state.timeoutId) clearTimeout(state.timeoutId);
+          state.timeoutId = setTimeout(resetSequence, 2000);
+        };
+
+        const touchListHasId = (touchList, id) => {
+          for (let i = 0; i < touchList.length; i++) if (touchList[i].identifier === id) return true;
+          return false;
+        };
+
+        const getTouchById = (touchList, id) => {
+          for (let i = 0; i < touchList.length; i++) if (touchList[i].identifier === id) return touchList[i];
+          return null;
+        };
+
+        const hidePanel = () => {
+          panel.style.display = 'none';
+          panel.setAttribute('aria-hidden', 'true');
+        };
+
+        const showPanel = () => {
+          if (!normalGameplayActive()) return;
+          grid.innerHTML = '';
+          LEVELS.forEach((level, index) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.textContent = level.name || `Level ${index + 1}`;
+            btn.addEventListener('click', () => {
+              hidePanel();
+              currentLevelIndex = index;
+              console.log(`[Stickman cheat] Warping to ${btn.textContent}`);
+              loadCurrentLevel(false);
+            });
+            grid.appendChild(btn);
+          });
+          panel.style.display = 'block';
+          panel.setAttribute('aria-hidden', 'false');
+          console.log('[Stickman cheat] Level select activated');
+        };
+
+        safeOn(closeBtn, 'click', hidePanel);
+
+        safeOn(walletEl, 'touchstart', e => {
+          if (!normalGameplayActive() || panel.style.display === 'block') return;
+          const touch = e.changedTouches && e.changedTouches[0];
+          if (!touch) return;
+          resetSequence();
+          state.walletTouchId = touch.identifier;
+          state.active = true;
+          armTimeout();
+        }, { passive: true });
+
+        safeOn(document, 'touchstart', e => {
+          if (!state.active || state.walletTouchId === null || !normalGameplayActive()) return;
+          if (!touchListHasId(e.touches, state.walletTouchId)) { resetSequence(); return; }
+          for (let i = 0; i < e.changedTouches.length; i++) {
+            const touch = e.changedTouches[i];
+            if (touch.identifier !== state.walletTouchId && state.swipeTouchId === null) {
+              state.swipeTouchId = touch.identifier;
+              state.startX = touch.clientX;
+              state.startY = touch.clientY;
+              armTimeout();
+              break;
+            }
+          }
+        }, { passive: true });
+
+        safeOn(document, 'touchmove', e => {
+          if (!state.active || state.walletTouchId === null) return;
+          if (!normalGameplayActive() || !touchListHasId(e.touches, state.walletTouchId)) { resetSequence(); return; }
+        }, { passive: true });
+
+        safeOn(document, 'touchend', e => {
+          if (!state.active || state.walletTouchId === null) return;
+          if (!touchListHasId(e.touches, state.walletTouchId)) { resetSequence(); return; }
+
+          const endedSwipe = getTouchById(e.changedTouches, state.swipeTouchId);
+          if (!endedSwipe) return;
+
+          const dx = endedSwipe.clientX - state.startX;
+          const dy = endedSwipe.clientY - state.startY;
+          const verticalEnough = Math.abs(dy) >= 30 && Math.abs(dy) > Math.abs(dx) * 1.15;
+          const direction = verticalEnough ? (dy < 0 ? 'up' : 'down') : null;
+
+          state.swipeTouchId = null;
+          state.startX = 0;
+          state.startY = 0;
+
+          if (!direction || direction !== requiredSequence[state.sequenceIndex]) {
+            state.sequenceIndex = 0;
+            armTimeout();
+            return;
+          }
+
+          state.sequenceIndex++;
+          if (state.sequenceIndex >= requiredSequence.length) {
+            resetSequence();
+            showPanel();
+            return;
+          }
+          armTimeout();
+        }, { passive: true });
+
+        safeOn(document, 'touchcancel', e => {
+          if (!state.active) return;
+          if (touchListHasId(e.changedTouches, state.walletTouchId) || touchListHasId(e.changedTouches, state.swipeTouchId)) resetSequence();
+        }, { passive: true });
+      }
+
+
       safeOn(window, 'keydown', e => {
         unlockAudio();
         if (introActive && (e.key === 'Enter' || e.key === ' ')) {
@@ -3015,6 +3015,7 @@ html, body {
       safeOn($('restartButton'), 'click', () => { unlockAudio(); playSfx('start'); restartGame(); });
       safeOn($('restartTouch'), 'pointerdown', e => { e.preventDefault(); unlockAudio(); playSfx('start'); restartGame(); });
       safeOn($('buyButton'), 'click', buyHealth);
+      setupHiddenLevelCheat();
 
       function onResize() {
         camera.aspect = innerWidth / innerHeight;
@@ -3048,7 +3049,7 @@ html, body {
 
         if (!introActive && !gameOver) {
           updatePlayer(frameScale);
-          checkSpikes(); updateDynamicObstacles(frameScale); checkPotions(); checkDoors(); checkEnemyHit(); updateEnemies();
+          checkSpikes(); updateAdvancedObstacles(frameScale); checkPotions(); checkDoors(); checkEnemyHit(); updateEnemies();
         } else {
           enemies.forEach(e => { if (!e.dead) drawEnemy(e); });
         }
