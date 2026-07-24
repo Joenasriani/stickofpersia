@@ -11,19 +11,310 @@ permissions:
 jobs:
   package:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - name: Check out repository
+      - name: Check out audit host
         uses: actions/checkout@v4
-      - name: Create clean source archive
+
+      - name: Export latest game repositories
+        shell: bash
         run: |
-          zip -r game-source.zip . \
-            -x '.git/*' \
-            -x '.github/workflows/export-market-package.yml' \
-            -x 'game-source.zip'
-      - name: Upload package
+          set -u
+          mkdir -p export/repos export/zips export/reports export/screenshots
+
+          repos=(
+            stickman
+            diorama-game
+            pathway-game
+            paradigm-shift-game
+            ascension
+            ascension-opt
+            ascension-opt-playstore
+            the-ascension-game
+            ar-tetris-mobile
+            kids-happy-collector
+            zipit-game
+            hangman
+            coloring-book
+            bmx-xtreme
+            the-lego-game
+            the-lego-game-2
+            kids-svg
+            tictactoe-advanced
+            kids-no-to-drugs
+            jumpy-jumperson
+            quantum-entanglement-game
+            life-and-origins-game
+            kids-hero-quest
+            kids-safety-champion
+            kids-hero-plate
+            kids-kindness-drive
+            kids-a-smarter-me
+            kids-ergo-matic
+            teslamadness
+          )
+
+          printf 'repository,status,commit,commit_date,default_branch\n' > export/reports/repository_manifest.csv
+
+          for repo in "${repos[@]}"; do
+            echo "=== $repo ==="
+            target="export/repos/$repo"
+            if git clone --depth 1 "https://github.com/Joenasriani/$repo.git" "$target"; then
+              commit=$(git -C "$target" rev-parse HEAD)
+              commit_date=$(git -C "$target" log -1 --format=%cI)
+              branch=$(git -C "$target" branch --show-current)
+              printf '%s,cloned,%s,%s,%s\n' "$repo" "$commit" "$commit_date" "$branch" >> export/reports/repository_manifest.csv
+              rm -rf "$target/.git"
+              (
+                cd "$target"
+                zip -qr "../../zips/${repo}-latest-github.zip" . \
+                  -x '.github/workflows/export-market-package.yml' \
+                  -x '*.DS_Store' \
+                  -x '__MACOSX/*'
+              )
+            else
+              printf '%s,missing,,,\n' "$repo" >> export/reports/repository_manifest.csv
+              rm -rf "$target"
+            fi
+          done
+
+      - name: Static package audit
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import csv, json, os, re, subprocess
+          from pathlib import Path
+          from urllib.parse import unquote
+
+          base = Path('export/repos')
+          report_dir = Path('export/reports')
+          report_dir.mkdir(parents=True, exist_ok=True)
+          rows = []
+
+          asset_exts = {
+              'audio': {'.mp3','.wav','.ogg','.m4a','.aac','.flac'},
+              'image': {'.png','.jpg','.jpeg','.webp','.gif','.svg','.ico'},
+              'font': {'.ttf','.otf','.woff','.woff2'},
+              'model': {'.glb','.gltf','.fbx','.obj','.mtl','.bin'},
+          }
+          ref_re = re.compile(r'''(?:src|href)\s*=\s*["']([^"']+)["']|url\(\s*["']?([^\)"']+)''', re.I)
+          script_re = re.compile(r'<script([^>]*)>(.*?)</script>', re.I | re.S)
+
+          for repo_dir in sorted(p for p in base.iterdir() if p.is_dir()):
+              repo = repo_dir.name
+              all_files = [p for p in repo_dir.rglob('*') if p.is_file()]
+              entries = []
+              for candidate in ['index.html','dist/index.html','docs/index.html','public/index.html','build/index.html']:
+                  p = repo_dir / candidate
+                  if p.exists(): entries.append(p)
+              if not entries:
+                  entries = sorted(repo_dir.rglob('index.html'))[:5]
+              entry = entries[0] if entries else None
+              missing = []
+              external = []
+              syntax_errors = []
+              refs_checked = 0
+              placeholders = []
+
+              for p in all_files:
+                  if p.suffix.lower() in {'.html','.js','.mjs','.cjs','.css','.json'} and p.stat().st_size < 2_000_000:
+                      try:
+                          text = p.read_text(encoding='utf-8', errors='replace')
+                      except Exception:
+                          continue
+                      if re.search(r'\b(TODO|FIXME|PLACEHOLDER|COMING SOON)\b', text, re.I):
+                          placeholders.append(str(p.relative_to(repo_dir)))
+
+              if entry:
+                  text = entry.read_text(encoding='utf-8', errors='replace')
+                  for m in ref_re.finditer(text):
+                      ref = (m.group(1) or m.group(2) or '').strip()
+                      if not ref or ref.startswith(('#','data:','blob:','javascript:','mailto:','tel:')):
+                          continue
+                      refs_checked += 1
+                      if re.match(r'^https?://', ref, re.I) or ref.startswith('//'):
+                          external.append(ref)
+                          continue
+                      clean = unquote(ref.split('?',1)[0].split('#',1)[0])
+                      target = (entry.parent / clean).resolve()
+                      try:
+                          target.relative_to(repo_dir.resolve())
+                      except ValueError:
+                          missing.append(ref + ' [outside package]')
+                          continue
+                      if not target.exists():
+                          missing.append(ref)
+
+                  # Check inline JavaScript syntax with Node.
+                  for i, match in enumerate(script_re.finditer(text), 1):
+                      attrs, body = match.groups()
+                      if re.search(r'\bsrc\s*=', attrs, re.I) or not body.strip():
+                          continue
+                      tmp = Path('/tmp') / f'{repo}_inline_{i}.js'
+                      tmp.write_text(body, encoding='utf-8')
+                      proc = subprocess.run(['node','--check',str(tmp)], capture_output=True, text=True)
+                      if proc.returncode:
+                          syntax_errors.append(f'inline-script-{i}: {proc.stderr.strip()[:500]}')
+
+              for p in all_files:
+                  if p.suffix.lower() in {'.js','.mjs','.cjs'} and p.stat().st_size < 5_000_000:
+                      proc = subprocess.run(['node','--check',str(p)], capture_output=True, text=True)
+                      if proc.returncode:
+                          syntax_errors.append(f'{p.relative_to(repo_dir)}: {proc.stderr.strip()[:500]}')
+
+              counts = {kind: sum(1 for p in all_files if p.suffix.lower() in exts) for kind, exts in asset_exts.items()}
+              status = 'static-pass'
+              blockers = []
+              if not entry:
+                  status = 'static-fail'
+                  blockers.append('No index.html entry point found')
+              if missing:
+                  status = 'static-fail'
+                  blockers.append(f'{len(missing)} missing local references')
+              if syntax_errors:
+                  status = 'static-fail'
+                  blockers.append(f'{len(syntax_errors)} JavaScript syntax errors')
+
+              detail = {
+                  'repository': repo,
+                  'entry': str(entry.relative_to(repo_dir)) if entry else None,
+                  'file_count': len(all_files),
+                  'refs_checked': refs_checked,
+                  'missing_references': sorted(set(missing)),
+                  'external_dependencies': sorted(set(external)),
+                  'javascript_syntax_errors': syntax_errors,
+                  'placeholder_files': sorted(set(placeholders)),
+                  'asset_counts': counts,
+                  'status': status,
+                  'blockers': blockers,
+              }
+              (report_dir / f'{repo}-static.json').write_text(json.dumps(detail, indent=2), encoding='utf-8')
+              rows.append(detail)
+
+          with (report_dir / 'static_summary.csv').open('w', newline='', encoding='utf-8') as f:
+              w = csv.writer(f)
+              w.writerow(['repository','status','entry','files','missing_refs','syntax_errors','external_dependencies','audio','images','fonts','models','placeholder_files'])
+              for d in rows:
+                  w.writerow([
+                      d['repository'], d['status'], d['entry'] or '', d['file_count'],
+                      len(d['missing_references']), len(d['javascript_syntax_errors']),
+                      len(d['external_dependencies']), d['asset_counts']['audio'],
+                      d['asset_counts']['image'], d['asset_counts']['font'],
+                      d['asset_counts']['model'], len(d['placeholder_files'])
+                  ])
+          PY
+
+      - name: Basic browser launch audit
+        shell: bash
+        run: |
+          set -u
+          CHROME_BIN=$(command -v google-chrome-stable || command -v google-chrome || command -v chromium || command -v chromium-browser || true)
+          if [ -z "$CHROME_BIN" ]; then
+            echo '{"status":"blocked","reason":"No Chromium executable on runner"}' > export/reports/runtime_global.json
+            exit 0
+          fi
+
+          mkdir -p /tmp/browser-audit
+          cd /tmp/browser-audit
+          npm init -y >/dev/null 2>&1
+          npm install playwright-core@1.54.1 >/dev/null 2>&1
+          cd "$GITHUB_WORKSPACE"
+
+          python3 -m http.server 8765 --directory export/repos >/tmp/game-http.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID || true' EXIT
+          sleep 2
+
+          cat > /tmp/browser-audit/audit.js <<'JS'
+          const fs = require('fs');
+          const path = require('path');
+          const { chromium } = require('playwright-core');
+
+          (async () => {
+            const chrome = process.env.CHROME_BIN;
+            const root = process.env.REPOS_ROOT;
+            const reports = process.env.REPORTS_ROOT;
+            const shots = process.env.SHOTS_ROOT;
+            const browser = await chromium.launch({headless: true, executablePath: chrome, args:['--no-sandbox','--disable-dev-shm-usage']});
+            const repos = fs.readdirSync(root).filter(n => fs.statSync(path.join(root,n)).isDirectory()).sort();
+            for (const repo of repos) {
+              const staticPath = path.join(reports, `${repo}-static.json`);
+              if (!fs.existsSync(staticPath)) continue;
+              const stat = JSON.parse(fs.readFileSync(staticPath,'utf8'));
+              if (!stat.entry) continue;
+              const page = await browser.newPage({viewport:{width:1365,height:768}});
+              const consoleErrors = [];
+              const pageErrors = [];
+              const failedRequests = [];
+              page.on('console', m => { if (m.type()==='error') consoleErrors.push(m.text()); });
+              page.on('pageerror', e => pageErrors.push(String(e)));
+              page.on('requestfailed', r => failedRequests.push(`${r.url()} :: ${r.failure()?.errorText || 'failed'}`));
+              let navError = null;
+              let clickedStart = false;
+              let bodyText = '';
+              let canvasCount = 0;
+              let visibleButtons = [];
+              try {
+                const url = `http://127.0.0.1:8765/${encodeURIComponent(repo)}/${stat.entry.split('/').map(encodeURIComponent).join('/')}`;
+                await page.goto(url, {waitUntil:'domcontentloaded', timeout:20000});
+                await page.waitForTimeout(2500);
+                const starts = page.getByRole('button', {name:/start|play|begin|enter|quest|continue/i});
+                if (await starts.count()) {
+                  try { await starts.first().click({timeout:3000}); clickedStart = true; await page.waitForTimeout(2000); } catch (_) {}
+                }
+                bodyText = (await page.locator('body').innerText({timeout:3000})).slice(0,2000);
+                canvasCount = await page.locator('canvas').count();
+                visibleButtons = await page.locator('button:visible').allInnerTexts();
+                await page.screenshot({path:path.join(shots,`${repo}.png`), fullPage:false});
+              } catch (e) {
+                navError = String(e);
+              }
+              const result = {
+                repository: repo,
+                entry: stat.entry,
+                navigation_error: navError,
+                clicked_common_start_button: clickedStart,
+                canvas_count: canvasCount,
+                visible_buttons: visibleButtons,
+                body_text_sample: bodyText,
+                console_errors: consoleErrors,
+                page_errors: pageErrors,
+                failed_requests: failedRequests,
+                status: (!navError && pageErrors.length===0 && canvasCount>0) ? 'runtime-basic-pass' : 'runtime-review-required'
+              };
+              fs.writeFileSync(path.join(reports,`${repo}-runtime.json`), JSON.stringify(result,null,2));
+              await page.close();
+            }
+            await browser.close();
+          })().catch(e => { console.error(e); process.exit(1); });
+          JS
+
+          CHROME_BIN="$CHROME_BIN" \
+          REPOS_ROOT="$GITHUB_WORKSPACE/export/repos" \
+          REPORTS_ROOT="$GITHUB_WORKSPACE/export/reports" \
+          SHOTS_ROOT="$GITHUB_WORKSPACE/export/screenshots" \
+          node /tmp/browser-audit/audit.js || true
+
+      - name: Create master collection
+        shell: bash
+        run: |
+          cp README.md export/AUDIT_HOST_README.md || true
+          cat > export/README_MARKET_COLLECTION.md <<'EOF'
+          # Latest GitHub Game Collection
+
+          This collection contains one clean ZIP per candidate game repository, plus repository metadata, static package reports, basic browser-launch reports, and screenshots.
+
+          Important: a basic browser launch is not a complete human playthrough of every level. Use the reports to distinguish static-pass, runtime-basic-pass, and review-required builds. Project-thread builds newer than GitHub must be compared separately before release.
+          EOF
+          (
+            cd export
+            zip -qr ../latest-games-github-audit-collection.zip zips reports screenshots README_MARKET_COLLECTION.md
+          )
+
+      - name: Upload complete collection
         uses: actions/upload-artifact@v4
         with:
-          name: game-source
-          path: game-source.zip
+          name: latest-games-github-audit-collection
+          path: latest-games-github-audit-collection.zip
           if-no-files-found: error
           retention-days: 1
