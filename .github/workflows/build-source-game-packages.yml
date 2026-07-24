@@ -1,0 +1,106 @@
+name: Build source game packages
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-games:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build source repositories
+        shell: bash
+        run: |
+          set -u
+          mkdir -p built/source built/packages built/reports built/screenshots
+          printf 'repository,status,commit,commit_date,workdir,output\n' > built/reports/build_manifest.csv
+
+          build_repo() {
+            repo="$1"
+            subdir="$2"
+            target="built/source/$repo"
+            echo "=== BUILD $repo ($subdir) ==="
+            if ! git clone --depth 1 "https://github.com/Joenasriani/$repo.git" "$target"; then
+              printf '%s,clone-failed,,,,\n' "$repo" >> built/reports/build_manifest.csv
+              return
+            fi
+            commit=$(git -C "$target" rev-parse HEAD)
+            commit_date=$(git -C "$target" log -1 --format=%cI)
+            work="$target"
+            if [ -n "$subdir" ]; then work="$target/$subdir"; fi
+            if [ ! -f "$work/package.json" ]; then
+              printf '%s,no-package,%s,%s,%s,\n' "$repo" "$commit" "$commit_date" "$subdir" >> built/reports/build_manifest.csv
+              return
+            fi
+            pushd "$work" >/dev/null
+            if [ -f package-lock.json ]; then npm ci --no-audit --no-fund; else npm install --no-audit --no-fund; fi
+            if npm run build; then
+              output=""
+              for candidate in dist build out; do
+                if [ -f "$candidate/index.html" ]; then output="$candidate"; break; fi
+              done
+              if [ -n "$output" ]; then
+                zip -qr "$GITHUB_WORKSPACE/built/packages/${repo}-market-build.zip" "$output"/*
+                mkdir -p "$GITHUB_WORKSPACE/built/runtime/$repo"
+                cp -a "$output"/. "$GITHUB_WORKSPACE/built/runtime/$repo/"
+                printf '%s,built,%s,%s,%s,%s\n' "$repo" "$commit" "$commit_date" "$subdir" "$output" >> "$GITHUB_WORKSPACE/built/reports/build_manifest.csv"
+              else
+                printf '%s,no-output,%s,%s,%s,\n' "$repo" "$commit" "$commit_date" "$subdir" >> "$GITHUB_WORKSPACE/built/reports/build_manifest.csv"
+              fi
+            else
+              printf '%s,build-failed,%s,%s,%s,\n' "$repo" "$commit" "$commit_date" "$subdir" >> "$GITHUB_WORKSPACE/built/reports/build_manifest.csv"
+            fi
+            popd >/dev/null
+          }
+
+          build_repo coloring-book ""
+          build_repo kids-svg frontend
+          build_repo kids-svg-game frontend
+          build_repo kids-match frontend
+          build_repo legocraft ""
+          build_repo stickmans-homework ""
+          build_repo ascension ""
+          build_repo the-ascension-game ""
+
+      - name: Browser launch built packages
+        shell: bash
+        run: |
+          set -u
+          if [ ! -d built/runtime ]; then exit 0; fi
+          CHROME_BIN=$(command -v google-chrome-stable || command -v google-chrome || command -v chromium || command -v chromium-browser || true)
+          if [ -z "$CHROME_BIN" ]; then exit 0; fi
+          mkdir -p /tmp/build-browser && cd /tmp/build-browser
+          npm init -y >/dev/null 2>&1
+          npm install playwright-core@1.54.1 >/dev/null 2>&1
+          cd "$GITHUB_WORKSPACE"
+          python3 -m http.server 8767 --directory built/runtime >/tmp/build-http.log 2>&1 &
+          SERVER_PID=$!; trap 'kill $SERVER_PID || true' EXIT; sleep 2
+          cat > /tmp/build-browser/audit.js <<'JS'
+          const fs=require('fs'),path=require('path'); const {chromium}=require('playwright-core');
+          (async()=>{const b=await chromium.launch({headless:true,executablePath:process.env.CHROME_BIN,args:['--no-sandbox']});
+          for(const repo of fs.readdirSync(process.env.ROOT).sort()){const p=await b.newPage({viewport:{width:1365,height:768}}),pe=[],ce=[],rf=[];p.on('pageerror',e=>pe.push(String(e)));p.on('console',m=>{if(m.type()==='error')ce.push(m.text())});p.on('requestfailed',r=>rf.push(`${r.url()} :: ${r.failure()?.errorText||''}`));let nav=null,text='',canvas=0,clicked=false;
+          try{await p.goto(`http://127.0.0.1:8767/${encodeURIComponent(repo)}/index.html`,{waitUntil:'domcontentloaded',timeout:30000});await p.waitForTimeout(3000);const starts=p.getByRole('button',{name:/start|play|begin|enter|continue|run|ride/i});if(await starts.count())try{await starts.first().click({timeout:3000});clicked=true;await p.waitForTimeout(2000)}catch(_){};text=(await p.locator('body').innerText()).slice(0,1800);canvas=await p.locator('canvas').count();await p.screenshot({path:path.join(process.env.SHOTS,`${repo}.png`)})}catch(e){nav=String(e)}
+          const status=(!nav&&pe.length===0&&text.length>0)?'runtime-basic-pass':'runtime-review-required';fs.writeFileSync(path.join(process.env.REPORTS,`${repo}-runtime.json`),JSON.stringify({repository:repo,status,navigation_error:nav,clicked_common_start_button:clicked,canvas_count:canvas,body_text_sample:text,page_errors:pe,console_errors:ce,failed_requests:rf},null,2));await p.close()}
+          await b.close()})().catch(e=>{console.error(e);process.exit(1)});
+          JS
+          CHROME_BIN="$CHROME_BIN" ROOT="$GITHUB_WORKSPACE/built/runtime" REPORTS="$GITHUB_WORKSPACE/built/reports" SHOTS="$GITHUB_WORKSPACE/built/screenshots" node /tmp/build-browser/audit.js || true
+
+      - name: Package built collection
+        shell: bash
+        run: |
+          (cd built && zip -qr ../built-source-games-market-packages.zip packages reports screenshots)
+
+      - name: Upload built collection
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-source-games-market-packages
+          path: built-source-games-market-packages.zip
+          if-no-files-found: error
+          retention-days: 1
