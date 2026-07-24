@@ -1,0 +1,29 @@
+name: Export market package
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Create clean source archive
+        run: |
+          zip -r game-source.zip . \
+            -x '.git/*' \
+            -x '.github/workflows/export-market-package.yml' \
+            -x 'game-source.zip'
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: game-source
+          path: game-source.zip
+          if-no-files-found: error
+          retention-days: 1
